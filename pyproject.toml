@@ -1,5 +1,5 @@
 [project]
-name = "shop-manager-desktop"
+name = "shop-manager"
 version = "0.1.0"
 description = "Windows desktop application for store order and stock management"
 readme = "README.md"
@@ -11,6 +11,12 @@ dependencies = [
     "alembic>=1.13",
     "python-dotenv>=1.0"
 ]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
