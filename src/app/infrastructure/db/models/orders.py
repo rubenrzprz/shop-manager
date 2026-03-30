@@ -118,7 +118,7 @@ class Shipment(Base):
         CheckConstraint(
             "shipping_cost >= 0",
             name="ck_shipments_shipping_cost_non_negative",
-        )
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

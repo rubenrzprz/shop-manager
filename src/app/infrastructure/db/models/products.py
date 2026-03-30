@@ -13,7 +13,7 @@ class Product(Base):
         CheckConstraint(
             "base_price IS NULL OR base_price >= 0",
             name="ck_products_base_price_non_negative",
-        )
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
