@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, func, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.domain.enums import DiscountType, OrderStatus, OrderSupplierStatus, ShipmentStatus
@@ -10,6 +10,24 @@ from app.infrastructure.db.session import Base
 
 class Order(Base):
     __tablename__ = "orders"
+    __table_args__ = (
+        CheckConstraint(
+            "subtotal_amount >= 0",
+            name="ck_orders_subtotal_amount_non_negative",
+        ),
+        CheckConstraint(
+            "discount_value >= 0",
+            name="ck_orders_discount_value_non_negative",
+        ),
+        CheckConstraint(
+            "discount_amount >= 0",
+            name="ck_orders_discount_amount_non_negative",
+        ),
+        CheckConstraint(
+            "total_amount >= 0",
+            name="ck_orders_total_amount_non_negative",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
@@ -96,6 +114,12 @@ class Order(Base):
 
 class Shipment(Base):
     __tablename__ = "shipments"
+    __table_args__ = (
+        CheckConstraint(
+            "shipping_cost >= 0",
+            name="ck_shipments_shipping_cost_non_negative",
+        )
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
@@ -154,6 +178,20 @@ class Shipment(Base):
 
 class OrderLine(Base):
     __tablename__ = "order_lines"
+    __table_args__ = (
+        CheckConstraint(
+            "quantity > 0",
+            name="ck_order_lines_quantity_positive",
+        ),
+        CheckConstraint(
+            "unit_price >= 0",
+            name="ck_order_lines_unit_price_non_negative",
+        ),
+        CheckConstraint(
+            "line_total >= 0",
+            name="ck_order_lines_line_total_non_negative",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
@@ -190,6 +228,12 @@ class OrderLine(Base):
 
 class OrderSupplier(Base):
     __tablename__ = "order_suppliers"
+    __table_args__ = (
+        CheckConstraint(
+            "cost >= 0",
+            name="ck_order_suppliers_cost_non_negative",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 

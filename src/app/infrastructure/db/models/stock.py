@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Text, func, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.domain.enums import StockMovementType, StockReferenceType
@@ -9,6 +9,12 @@ from app.infrastructure.db.session import Base
 
 class StockMovement(Base):
     __tablename__ = "stock_movements"
+    __table_args__ = (
+        CheckConstraint(
+            "quantity > 0",
+            name="ck_stock_movements_quantity_positive",
+        )
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 

@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infrastructure.db.session import Base
@@ -9,6 +9,12 @@ from app.infrastructure.db.session import Base
 
 class Product(Base):
     __tablename__ = "products"
+    __table_args__ = (
+        CheckConstraint(
+            "base_price IS NULL OR base_price >= 0",
+            name="ck_products_base_price_non_negative",
+        )
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
@@ -64,6 +70,20 @@ class Product(Base):
 
 class ProductVariant(Base):
     __tablename__ = "product_variants"
+    __table_args__ = (
+        CheckConstraint(
+            "prive_override IS NULL OR prive_override >= 0",
+            name="ck_products_prive_override_non_negative",
+        ),
+        CheckConstraint(
+            "stock_current IS NULL OR stock_current >= 0",
+            name="ck_product_variants_stock_current_non_negative",
+        ),
+        CheckConstraint(
+            "stock_minimum IS NULL OR stock_minimum >= 0",
+            name="ck_product_variants_stock_minimum_non_negative",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
@@ -111,6 +131,12 @@ class ProductVariant(Base):
 
 class ProductImage(Base):
     __tablename__ = "product_images"
+    __table_args__ = (
+        CheckConstraint(
+            "sort_order IS NULL OR sort_order >= 0",
+            name="ck_product_images_sort_order_non_negative",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
