@@ -72,8 +72,8 @@ class ProductVariant(Base):
     __tablename__ = "product_variants"
     __table_args__ = (
         CheckConstraint(
-            "prive_override IS NULL OR prive_override >= 0",
-            name="ck_products_prive_override_non_negative",
+            "price_override IS NULL OR price_override >= 0",
+            name="ck_product_variants_price_override_non_negative",
         ),
         CheckConstraint(
             "stock_current IS NULL OR stock_current >= 0",
