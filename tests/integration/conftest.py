@@ -51,5 +51,4 @@ def db_session(migrated_engine):
         yield session
     finally:
         session.close()
-        transaction.rollback()
         connection.close()
