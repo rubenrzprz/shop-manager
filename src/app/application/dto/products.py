@@ -23,3 +23,24 @@ class CreateProductInput:
     track_stock: bool = False
     is_active: bool = True
     variants: list[CreateProductVariantInput] = field(default_factory=list)
+
+@dataclass(frozen=True)
+class ProductVariantListItem:
+    id: int
+    sku: str
+    size: str | None
+    color: str | None
+    variant_name: str | None
+    price_override: Decimal | None
+    is_active: bool
+
+@dataclass(frozen=True)
+class ProductListItem:
+    id: int
+    supplier_id: int | None
+    name: str
+    description: str | None
+    base_price: Decimal | None
+    track_stock: bool
+    is_active: bool
+    variants: list[ProductVariantListItem]

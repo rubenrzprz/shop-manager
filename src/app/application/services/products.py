@@ -2,9 +2,15 @@ import re
 from decimal import Decimal
 
 import unicodedata
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
-from app.application.dto.products import CreateProductInput, CreateProductVariantInput
+from app.application.dto.products import (
+    CreateProductInput,
+    CreateProductVariantInput,
+    ProductListItem,
+    ProductVariantListItem,
+)
 from app.infrastructure.db.models import Product, ProductVariant
 
 
@@ -108,3 +114,47 @@ class CreateProductService:
     def _generate_sku(self, product_name: str, product_id: int, variant_index: int) -> str:
         prefix = self._generate_prefix(product_name)
         return f"{prefix}-{product_id:04d}-{variant_index:02d}"
+
+class ListProductsService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self) -> list[ProductListItem]:
+        statement = (
+            select(Product)
+            .options(selectinload(Product.variants))
+            .order_by(Product.id)
+        )
+
+        products = self._session.scalars(statement).all()
+
+        result: list[ProductListItem] = []
+
+        for product in products:
+            variants = [
+                ProductVariantListItem(
+                    id=variant.id,
+                    sku=variant.sku,
+                    size=variant.size,
+                    color=variant.color,
+                    variant_name=variant.variant_name,
+                    price_override=variant.price_override,
+                    is_active=variant.is_active,
+                )
+                for variant in sorted(product.variants, key=lambda v: v.id)
+            ]
+
+            result.append(
+                ProductListItem(
+                    id=product.id,
+                    supplier_id=product.supplier_id,
+                    name=product.name,
+                    description=product.description,
+                    base_price=product.base_price,
+                    track_stock=product.track_stock,
+                    is_active=product.is_active,
+                    variants=variants,
+                )
+            )
+
+        return result
