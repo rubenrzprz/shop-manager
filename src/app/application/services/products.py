@@ -18,7 +18,7 @@ class CreateProductService:
         product = Product(
             supplier_id=data.supplier_id,
             name=data.name.strip(),
-            description=data.description.strip(),
+            description=data.description,
             base_price=data.base_price,
             track_stock=data.track_stock,
             is_active=data.is_active,
