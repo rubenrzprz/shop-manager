@@ -2,6 +2,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QTableWidget,
@@ -12,6 +13,7 @@ from PySide6.QtWidgets import (
 
 from app.application.services.products import ListProductsService
 from app.infrastructure.db.session import SessionLocal
+from app.ui.dialogs.product_dialog import ProductDialog
 
 
 class ProductsPage(QWidget):
@@ -20,6 +22,9 @@ class ProductsPage(QWidget):
 
         self._title_label = QLabel("Products")
         self._title_label.setObjectName("pageTitle")
+
+        self._create_button = QPushButton("New Product")
+        self._create_button.clicked.connect(self.open_create_dialog)
 
         self._refresh_button = QPushButton("Refresh")
         self._refresh_button.clicked.connect(self.load_products)
@@ -45,12 +50,23 @@ class ProductsPage(QWidget):
 
         layout = QVBoxLayout()
         layout.addWidget(self._title_label)
-        layout.addWidget(self._refresh_button, alignment=Qt.AlignLeft)
+
+        actions_layout = QHBoxLayout()
+        actions_layout.addWidget(self._create_button)
+        actions_layout.addWidget(self._refresh_button)
+        actions_layout.addStretch()
+
+        layout.addLayout(actions_layout)
         layout.addWidget(self._table)
 
         self.setLayout(layout)
 
         self.load_products()
+
+    def open_create_dialog(self) -> None:
+        dialog = ProductDialog(self)
+        if dialog.exec():
+            self.load_products()
 
     def load_products(self) -> None:
         session = SessionLocal()
