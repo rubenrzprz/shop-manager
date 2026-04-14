@@ -63,12 +63,20 @@ class ProductDialog(QDialog):
         self._load_suppliers()
 
     def _load_suppliers(self) -> None:
-        session = SessionLocal()
+        try:
+            session = SessionLocal()
+        except Exception as exc:
+            QMessageBox.critical(self, "Could not load suppliers", str(exc))
+            self._supplier_combo.setEnabled(False)
+            return
 
         try:
             suppliers = session.query(Supplier).order_by(Supplier.name).all()
             for supplier in suppliers:
                 self._supplier_combo.addItem(supplier.name, supplier.id)
+        except Exception as exc:
+            QMessageBox.critical(self, "Could not load suppliers", str(exc))
+            self._supplier_combo.setEnabled(False)
         finally:
             session.close()
 
@@ -86,7 +94,11 @@ class ProductDialog(QDialog):
             QMessageBox.critical(self, "Invalid data", str(exc))
             return
 
-        session = SessionLocal()
+        try:
+            session = SessionLocal()
+        except Exception as exc:
+            QMessageBox.critical(self, "Could not create product", str(exc))
+            return
 
         try:
             service = CreateProductService(session)
