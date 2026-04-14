@@ -70,3 +70,20 @@ def test_create_product_service_fails_when_duplicate_variant_skus_are_provided()
 
     with pytest.raises(ValueError, match="Variant SKUs must be unique within the request."):
         service.execute(data)
+
+
+def test_create_product_service_fails_when_variant_sku_is_blank():
+    service = CreateProductService(session=None)  # type: ignore[arg-type]
+
+    data = CreateProductInput(
+        name="Camiseta tradicional",
+        variants=[
+            CreateProductVariantInput(
+                sku="   ",
+                variant_name="Variant A",
+            ),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Variant #1 SKU cannot be blank."):
+        service.execute(data)

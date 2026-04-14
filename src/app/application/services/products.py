@@ -69,14 +69,24 @@ class CreateProductService:
         if data.base_price is not None and data.base_price < Decimal("0"):
             raise ValueError("Product base price cannot be negative.")
 
-        provided_skus = [variant.sku for variant in data.variants if variant.sku]
+        provided_skus: list[str] = []
         if len(provided_skus) != len(set(provided_skus)):
             raise ValueError("Variant SKUs must be unique within the request.")
 
         for index, variant in enumerate(data.variants, start=1):
+            normalized_sku = self._normalize_sku(variant.sku)
+            if normalized_sku is not None:
+                provided_skus.append(normalized_sku)
             self._validate_variant_input(variant, index)
 
+        if len(provided_skus) != len(set(provided_skus)):
+            raise ValueError("Variant SKUs must be unique within the request.")
+
     def _validate_variant_input(self, variant: CreateProductVariantInput, index: int) -> None:
+        normalized_sku = self._normalize_sku(variant.sku)
+        if variant.sku is not None and normalized_sku is None:
+            raise ValueError(f"Variant #{index} SKU cannot be blank.")
+
         if variant.price_override is not None and variant.price_override < Decimal("0"):
             raise ValueError(f"Variant #{index} price override cannot be negative.")
 
@@ -117,6 +127,14 @@ class CreateProductService:
     def _generate_sku(self, product_name: str, product_id: int, variant_index: int) -> str:
         prefix = self._generate_prefix(product_name)
         return f"{prefix}-{product_id:04d}-{variant_index:02d}"
+
+    @staticmethod
+    def _normalize_sku(raw_sku: str | None) -> str | None:
+        if raw_sku is None:
+            return None
+
+        normalized = raw_sku.strip()
+        return normalized or None
 
 class ListProductsService:
     def __init__(self, session: Session) -> None:
