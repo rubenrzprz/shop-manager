@@ -94,6 +94,9 @@ class CreateProductService:
         normalized = unicodedata.normalize("NFKD", name)
         ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
 
+        if not ascii_name.strip():
+            return "PRD"
+
         # Extract first word
         first_word = ascii_name.strip().split()[0]
 
