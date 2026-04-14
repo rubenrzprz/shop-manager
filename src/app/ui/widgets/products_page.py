@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.application.dto.products import ProductListItem
 from app.application.services.products import ListProductsService
 from app.infrastructure.db.models import Product
 from app.infrastructure.db.session import SessionLocal
@@ -80,7 +81,7 @@ class ProductsPage(QWidget):
         finally:
             session.close()
 
-    def _build_variant_summary(self, product: Product) -> str:
+    def _build_variant_summary(self, product: ProductListItem) -> str:
         if not product.variants:
             return "No variants"
 
@@ -97,7 +98,7 @@ class ProductsPage(QWidget):
 
         return ", ".join(summaries)
 
-    def _populate_table(self, products) -> None:
+    def _populate_table(self, products: list[ProductListItem]) -> None:
         self._table.setRowCount(len(products))
 
         for row, product in enumerate(products):
