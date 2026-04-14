@@ -17,10 +17,22 @@ python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
-If you also want development tools:
+If you also want test dependencies:
 
 ```bash
-python -m pip install -r requirements-dev.txt
+python -m pip install -e ".[test]"
+```
+
+If you want formatter and linter tools:
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+If you want both test and development dependencies:
+
+```bash
+python -m pip install -e ".[test,dev]"
 ```
 
 ### 2. Configure `.env`
