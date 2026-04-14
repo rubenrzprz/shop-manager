@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -72,14 +73,28 @@ class ProductsPage(QWidget):
             self.load_products()
 
     def load_products(self) -> None:
-        session = SessionLocal()
+        try:
+            session = SessionLocal()
+        except Exception as exc:
+            self._handle_load_products_error(exc)
+            return
 
         try:
             service = ListProductsService(session)
             products = service.execute()
             self._populate_table(products)
+        except Exception as exc:
+            self._handle_load_products_error(exc)
         finally:
             session.close()
+
+    def _handle_load_products_error(self, exc: Exception) -> None:
+        self._table.setRowCount(0)
+        QMessageBox.critical(
+            self,
+            "Could not load products",
+            str(exc),
+        )
 
     def _build_variant_summary(self, product: ProductListItem) -> str:
         if not product.variants:
