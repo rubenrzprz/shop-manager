@@ -6,6 +6,17 @@ from app.application.dto.products import CreateProductInput, CreateProductVarian
 from app.application.services.products import CreateProductService
 
 
+class StubSession:
+    def __init__(self) -> None:
+        self._next_product_id = 1
+
+    def add(self, instance) -> None:
+        return None
+
+    def flush(self) -> None:
+        return None
+
+
 def test_create_product_service_fails_when_name_is_blank():
     service = CreateProductService(session=None)  # type: ignore[arg-type]
 
@@ -87,3 +98,21 @@ def test_create_product_service_fails_when_variant_sku_is_blank():
 
     with pytest.raises(ValueError, match="Variant #1 SKU cannot be blank."):
         service.execute(data)
+
+
+def test_create_product_service_persists_normalized_variant_sku():
+    service = CreateProductService(session=StubSession())  # type: ignore[arg-type]
+
+    data = CreateProductInput(
+        name="Camiseta tradicional",
+        variants=[
+            CreateProductVariantInput(
+                sku=" SKU-001 ",
+                variant_name="Variant A",
+            ),
+        ],
+    )
+
+    product = service.execute(data)
+
+    assert product.variants[0].sku == "SKU-001"

@@ -36,7 +36,11 @@ class CreateProductService:
         generated_variants: list[ProductVariant] = []
 
         for index, variant_data in enumerate(data.variants, start=1):
-            sku = variant_data.sku or self._generate_sku(product.name, product.id, index)
+            sku = self._normalize_sku(variant_data.sku) or self._generate_sku(
+                product.name,
+                product.id,
+                index,
+            )
 
             variant = ProductVariant(
                 product_id=product.id,
