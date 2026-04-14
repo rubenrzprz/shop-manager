@@ -9,12 +9,16 @@ from app.application.services.products import CreateProductService
 class StubSession:
     def __init__(self) -> None:
         self._next_product_id = 1
+        self._added: list[object] = []
 
     def add(self, instance) -> None:
-        return None
+        self._added.append(instance)
 
     def flush(self) -> None:
-        return None
+        for instance in self._added:
+            if hasattr(instance, "id") and getattr(instance, "id", None) is None:
+                setattr(instance, "id", self._next_product_id)
+                self._next_product_id += 1
 
 
 def test_create_product_service_fails_when_name_is_blank():
@@ -155,3 +159,23 @@ def test_create_product_service_persists_normalized_variant_sku():
     product = service.execute(data)
 
     assert product.variants[0].sku == "SKU-001"
+
+
+def test_create_product_service_fails_when_provided_sku_collides_with_generated_sku():
+    service = CreateProductService(session=StubSession())  # type: ignore[arg-type]
+
+    data = CreateProductInput(
+        name="Camiseta tradicional",
+        variants=[
+            CreateProductVariantInput(
+                sku="CAM-0001-02",
+                variant_name="Variant A",
+            ),
+            CreateProductVariantInput(
+                variant_name="Variant B",
+            ),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Variant SKUs must be unique within the request."):
+        service.execute(data)

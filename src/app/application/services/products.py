@@ -32,6 +32,7 @@ class CreateProductService:
 
         self._session.add(product)
         self._session.flush()
+        self._validate_final_variant_skus(product.name, product.id, data.variants)
 
         generated_variants: list[ProductVariant] = []
 
@@ -77,9 +78,6 @@ class CreateProductService:
         )
 
         provided_skus: list[str] = []
-        if len(provided_skus) != len(set(provided_skus)):
-            raise ValueError("Variant SKUs must be unique within the request.")
-
         for index, variant in enumerate(data.variants, start=1):
             normalized_sku = self._normalize_sku(variant.sku)
             if normalized_sku is not None:
@@ -87,6 +85,20 @@ class CreateProductService:
             self._validate_variant_input(variant, index)
 
         if len(provided_skus) != len(set(provided_skus)):
+            raise ValueError("Variant SKUs must be unique within the request.")
+
+    def _validate_final_variant_skus(
+        self,
+        product_name: str,
+        product_id: int,
+        variants: list[CreateProductVariantInput],
+    ) -> None:
+        final_skus = [
+            self._normalize_sku(variant.sku) or self._generate_sku(product_name, product_id, index)
+            for index, variant in enumerate(variants, start=1)
+        ]
+
+        if len(final_skus) != len(set(final_skus)):
             raise ValueError("Variant SKUs must be unique within the request.")
 
     def _validate_variant_input(self, variant: CreateProductVariantInput, index: int) -> None:
