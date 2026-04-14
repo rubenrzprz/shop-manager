@@ -139,4 +139,7 @@ class ProductDialog(QDialog):
         except InvalidOperation as exc:
             raise ValueError("Base price must be a valid number.") from exc
 
+        if not parsed.is_finite():
+            raise ValueError("Base price must be a finite number.")
+
         return parsed
