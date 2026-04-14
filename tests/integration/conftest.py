@@ -2,6 +2,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine
+from sqlalchemy import event
 from sqlalchemy.orm import sessionmaker
 from testcontainers.postgres import PostgresContainer
 
@@ -46,11 +47,16 @@ def db_session(migrated_engine):
         expire_on_commit=False,
     )
     session = SessionLocal()
+    session.begin_nested()
+
+    @event.listens_for(session, "after_transaction_end")
+    def restart_savepoint(session_, trans) -> None:
+        if trans.nested and not trans._parent.nested:
+            session_.begin_nested()
 
     try:
         yield session
     finally:
         session.close()
-        if transaction.is_active:
-            transaction.rollback()
+        transaction.rollback()
         connection.close()
