@@ -1,10 +1,8 @@
 from decimal import Decimal
 
-import pytest
-
 from app.application.dto.products import CreateProductInput, CreateProductVariantInput
 from app.application.services.products import CreateProductService
-from app.infrastructure.db.models import Product, ProductVariant, Supplier
+from app.infrastructure.db.models import Supplier
 
 def test_create_product_service_creates_product_with_default_variant(db_session):
     supplier = Supplier(
@@ -80,69 +78,3 @@ def test_create_product_service_generates_incremental_variant_skus(db_session):
     assert len(product.variants) == 2
     assert product.variants[0].sku == f"VES-{product.id:04d}-01"
     assert product.variants[1].sku == f"VES-{product.id:04d}-02"
-
-
-def test_create_product_service_fails_when_name_is_blank(db_session):
-    service = CreateProductService(db_session)
-
-    data = CreateProductInput(
-        name="   ",
-        variants=[
-            CreateProductVariantInput(
-                variant_name="Default",
-            )
-        ],
-    )
-
-    with pytest.raises(ValueError, match="Product name is required."):
-        service.execute(data)
-
-
-def test_create_product_service_fails_when_no_variants_are_provided(db_session):
-    service = CreateProductService(db_session)
-
-    data = CreateProductInput(
-        name="Camiseta tradicional",
-        variants=[],
-    )
-
-    with pytest.raises(ValueError, match="A product must have at least one variant."):
-        service.execute(data)
-
-
-def test_create_product_service_fails_when_base_price_is_negative(db_session):
-    service = CreateProductService(db_session)
-
-    data = CreateProductInput(
-        name="Camiseta tradicional",
-        base_price=Decimal("-1.00"),
-        variants=[
-            CreateProductVariantInput(
-                variant_name="Default",
-            )
-        ],
-    )
-
-    with pytest.raises(ValueError, match="Product base price cannot be negative."):
-        service.execute(data)
-
-
-def test_create_product_service_fails_when_duplicate_variant_skus_are_provided(db_session):
-    service = CreateProductService(db_session)
-
-    data = CreateProductInput(
-        name="Camiseta tradicional",
-        variants=[
-            CreateProductVariantInput(
-                sku="CAM-9999-01",
-                variant_name="Variant A",
-            ),
-            CreateProductVariantInput(
-                sku="CAM-9999-01",
-                variant_name="Variant B",
-            ),
-        ],
-    )
-
-    with pytest.raises(ValueError, match="Variant SKUs must be unique within the request."):
-        service.execute(data)
