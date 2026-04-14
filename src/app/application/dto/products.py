@@ -31,6 +31,7 @@ class ProductVariantListItem:
     size: str | None
     color: str | None
     variant_name: str | None
+    description: str | None
     price_override: Decimal | None
     is_active: bool
 
@@ -38,6 +39,7 @@ class ProductVariantListItem:
 class ProductListItem:
     id: int
     supplier_id: int | None
+    supplier_name: str | None
     name: str
     description: str | None
     base_price: Decimal | None

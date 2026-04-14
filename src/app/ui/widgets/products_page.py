@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.application.services.products import ListProductsService
+from app.infrastructure.db.models import Product
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialogs.product_dialog import ProductDialog
 
@@ -30,9 +31,9 @@ class ProductsPage(QWidget):
         self._refresh_button.clicked.connect(self.load_products)
 
         self._table = QTableWidget()
-        self._table.setColumnCount(6)
+        self._table.setColumnCount(7)
         self._table.setHorizontalHeaderLabels(
-            ["ID", "Name", "Base Price", "Track Stock", "Active", "Variants"]
+            ["ID", "Name", "Supplier", "Base Price", "Track Stock", "Active", "Variant Summary"]
         )
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -47,6 +48,7 @@ class ProductsPage(QWidget):
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.Stretch)
 
         layout = QVBoxLayout()
         layout.addWidget(self._title_label)
@@ -78,22 +80,41 @@ class ProductsPage(QWidget):
         finally:
             session.close()
 
+    def _build_variant_summary(self, product: Product) -> str:
+        if not product.variants:
+            return "No variants"
+
+        summaries: list[str] = []
+
+        for variant in product.variants:
+            label = variant.variant_name
+
+            if not label:
+                parts = [part for part in [variant.size, variant.color] if part]
+                label = " / ".join(parts) if parts else "Default"
+
+            summaries.append(label)
+
+        return ", ".join(summaries)
+
     def _populate_table(self, products) -> None:
         self._table.setRowCount(len(products))
 
         for row, product in enumerate(products):
             base_price_text = "" if product.base_price is None else str(product.base_price)
+            supplier_text = product.supplier_name or ""
             track_stock_text = "Yes" if product.track_stock else "No"
             is_active_text = "Yes" if product.is_active else "No"
-            variants_count_text = str(len(product.variants))
+            variant_summary_text = self._build_variant_summary(product)
 
             items = [
                 QTableWidgetItem(str(product.id)),
                 QTableWidgetItem(product.name),
+                QTableWidgetItem(supplier_text),
                 QTableWidgetItem(base_price_text),
                 QTableWidgetItem(track_stock_text),
                 QTableWidgetItem(is_active_text),
-                QTableWidgetItem(variants_count_text),
+                QTableWidgetItem(variant_summary_text),
             ]
 
             for item in items:

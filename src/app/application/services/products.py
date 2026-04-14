@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import unicodedata
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, selectinload, joinedload
 
 from app.application.dto.products import (
     CreateProductInput,
@@ -122,7 +122,10 @@ class ListProductsService:
     def execute(self) -> list[ProductListItem]:
         statement = (
             select(Product)
-            .options(selectinload(Product.variants))
+            .options(
+                joinedload(Product.supplier),
+                selectinload(Product.variants),
+            )
             .order_by(Product.id)
         )
 
@@ -138,6 +141,7 @@ class ListProductsService:
                     size=variant.size,
                     color=variant.color,
                     variant_name=variant.variant_name,
+                    description=variant.description,
                     price_override=variant.price_override,
                     is_active=variant.is_active,
                 )
@@ -148,6 +152,7 @@ class ListProductsService:
                 ProductListItem(
                     id=product.id,
                     supplier_id=product.supplier_id,
+                    supplier_name=product.supplier.name if product.supplier else None,
                     name=product.name,
                     description=product.description,
                     base_price=product.base_price,
