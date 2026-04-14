@@ -70,8 +70,11 @@ class CreateProductService:
         if not data.variants:
             raise ValueError("A product must have at least one variant.")
 
-        if data.base_price is not None and data.base_price < Decimal("0"):
-            raise ValueError("Product base price cannot be negative.")
+        self._validate_decimal_amount(
+            data.base_price,
+            "Product base price must be a finite number.",
+            "Product base price cannot be negative.",
+        )
 
         provided_skus: list[str] = []
         if len(provided_skus) != len(set(provided_skus)):
@@ -91,8 +94,11 @@ class CreateProductService:
         if variant.sku is not None and normalized_sku is None:
             raise ValueError(f"Variant #{index} SKU cannot be blank.")
 
-        if variant.price_override is not None and variant.price_override < Decimal("0"):
-            raise ValueError(f"Variant #{index} price override cannot be negative.")
+        self._validate_decimal_amount(
+            variant.price_override,
+            f"Variant #{index} price override must be a finite number.",
+            f"Variant #{index} price override cannot be negative.",
+        )
 
         if variant.stock_current is not None and variant.stock_current < 0:
             raise ValueError(f"Variant #{index} stock_current cannot be negative.")
@@ -139,6 +145,21 @@ class CreateProductService:
 
         normalized = raw_sku.strip()
         return normalized or None
+
+    @staticmethod
+    def _validate_decimal_amount(
+        value: Decimal | None,
+        non_finite_message: str,
+        negative_message: str,
+    ) -> None:
+        if value is None:
+            return
+
+        if not value.is_finite():
+            raise ValueError(non_finite_message)
+
+        if value < Decimal("0"):
+            raise ValueError(negative_message)
 
 class ListProductsService:
     def __init__(self, session: Session) -> None:

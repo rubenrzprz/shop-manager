@@ -62,6 +62,24 @@ def test_create_product_service_fails_when_base_price_is_negative():
         service.execute(data)
 
 
+@pytest.mark.parametrize("base_price", [Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")])
+def test_create_product_service_fails_when_base_price_is_not_finite(base_price):
+    service = CreateProductService(session=None)  # type: ignore[arg-type]
+
+    data = CreateProductInput(
+        name="Camiseta tradicional",
+        base_price=base_price,
+        variants=[
+            CreateProductVariantInput(
+                variant_name="Default",
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Product base price must be a finite number."):
+        service.execute(data)
+
+
 def test_create_product_service_fails_when_duplicate_variant_skus_are_provided():
     service = CreateProductService(session=None)  # type: ignore[arg-type]
 
@@ -97,6 +115,27 @@ def test_create_product_service_fails_when_variant_sku_is_blank():
     )
 
     with pytest.raises(ValueError, match="Variant #1 SKU cannot be blank."):
+        service.execute(data)
+
+
+@pytest.mark.parametrize(
+    "price_override",
+    [Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")],
+)
+def test_create_product_service_fails_when_variant_price_override_is_not_finite(price_override):
+    service = CreateProductService(session=None)  # type: ignore[arg-type]
+
+    data = CreateProductInput(
+        name="Camiseta tradicional",
+        variants=[
+            CreateProductVariantInput(
+                variant_name="Variant A",
+                price_override=price_override,
+            ),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Variant #1 price override must be a finite number."):
         service.execute(data)
 
 
