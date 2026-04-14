@@ -10,9 +10,13 @@ class StubSession:
     def __init__(self) -> None:
         self._next_product_id = 1
         self._added: list[object] = []
+        self._deleted: list[object] = []
 
     def add(self, instance) -> None:
         self._added.append(instance)
+
+    def delete(self, instance) -> None:
+        self._deleted.append(instance)
 
     def flush(self) -> None:
         for instance in self._added:
@@ -162,7 +166,8 @@ def test_create_product_service_persists_normalized_variant_sku():
 
 
 def test_create_product_service_fails_when_provided_sku_collides_with_generated_sku():
-    service = CreateProductService(session=StubSession())  # type: ignore[arg-type]
+    session = StubSession()
+    service = CreateProductService(session=session)  # type: ignore[arg-type]
 
     data = CreateProductInput(
         name="Camiseta tradicional",
@@ -179,3 +184,5 @@ def test_create_product_service_fails_when_provided_sku_collides_with_generated_
 
     with pytest.raises(ValueError, match="Variant SKUs must be unique within the request."):
         service.execute(data)
+
+    assert len(session._deleted) == 1

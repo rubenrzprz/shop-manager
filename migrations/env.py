@@ -16,7 +16,7 @@ if config.config_file_name is not None:
 settings = get_settings()
 configured_url = config.get_main_option("sqlalchemy.url")
 if not configured_url or configured_url == "driver://user:pass@localhost/dbname":
-    config.set_main_option("sqlalchemy.url", settings.database_url)
+    config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 

@@ -32,7 +32,12 @@ class CreateProductService:
 
         self._session.add(product)
         self._session.flush()
-        self._validate_final_variant_skus(product.name, product.id, data.variants)
+        try:
+            self._validate_final_variant_skus(product.name, product.id, data.variants)
+        except ValueError:
+            self._session.delete(product)
+            self._session.flush()
+            raise
 
         generated_variants: list[ProductVariant] = []
 
