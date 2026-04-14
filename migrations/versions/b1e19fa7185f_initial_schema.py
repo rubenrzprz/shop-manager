@@ -229,4 +229,11 @@ def downgrade() -> None:
     op.drop_table('orders')
     op.drop_table('suppliers')
     op.drop_table('customers')
+    op.execute("DROP TYPE IF EXISTS stock_reference_type_enum")
+    op.execute("DROP TYPE IF EXISTS stock_movement_type_enum")
+    op.execute("DROP TYPE IF EXISTS shipment_status_enum")
+    op.execute("DROP TYPE IF EXISTS order_supplier_status_enum")
+    op.execute("DROP TYPE IF EXISTS discount_type_enum")
+    op.execute("DROP TYPE IF EXISTS order_status_enum")
+    op.execute("DROP TYPE IF EXISTS customer_type_enum")
     # ### end Alembic commands ###
