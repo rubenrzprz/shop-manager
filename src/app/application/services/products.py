@@ -13,6 +13,7 @@ from app.application.dto.products import (
     ProductVariantEditItem,
     ProductVariantListItem,
     SupplierOption,
+    UNSET,
     UpdateProductInput,
     UpdateProductVariantInput,
 )
@@ -313,43 +314,64 @@ class UpdateProductService:
         if product is None:
             raise ValueError("Product not found.")
 
-        product.supplier_id = data.supplier_id
-        product.name = data.name.strip()
-        product.description = data.description
-        product.base_price = data.base_price
-        product.track_stock = data.track_stock
+        if data.supplier_id is not UNSET:
+            product.supplier_id = data.supplier_id
+
+        if data.name is not UNSET:
+            product.name = data.name.strip()
+
+        if data.description is not UNSET:
+            product.description = data.description
+
+        if data.base_price is not UNSET:
+            product.base_price = data.base_price
+
+        if data.track_stock is not UNSET:
+            product.track_stock = data.track_stock
 
         if data.default_variant is not None:
             variant = self._find_product_variant(product, data.default_variant.variant_id)
-            variant.size = data.default_variant.size
-            variant.color = data.default_variant.color
-            variant.variant_name = data.default_variant.variant_name
-            variant.description = data.default_variant.description
-            variant.price_override = data.default_variant.price_override
+
+            if data.default_variant.size is not UNSET:
+                variant.size = data.default_variant.size
+
+            if data.default_variant.color is not UNSET:
+                variant.color = data.default_variant.color
+
+            if data.default_variant.variant_name is not UNSET:
+                variant.variant_name = data.default_variant.variant_name
+
+            if data.default_variant.description is not UNSET:
+                variant.description = data.default_variant.description
+
+            if data.default_variant.price_override is not UNSET:
+                variant.price_override = data.default_variant.price_override
 
         self._session.flush()
 
         return product
 
     def _validate_product_input(self, data: UpdateProductInput) -> None:
-        if not data.name or not data.name.strip():
+        if data.name is not UNSET and not data.name.strip():
             raise ValueError("Product name is required.")
 
-        CreateProductService._validate_decimal_amount(
-            data.base_price,
-            "Product base price must be a finite number.",
-            "Product base price cannot be negative.",
-        )
+        if data.base_price is not UNSET:
+            CreateProductService._validate_decimal_amount(
+                data.base_price,
+                "Product base price must be a finite number.",
+                "Product base price cannot be negative.",
+            )
 
         if data.default_variant is not None:
             self._validate_variant_input(data.default_variant)
 
     def _validate_variant_input(self, variant: UpdateProductVariantInput) -> None:
-        CreateProductService._validate_decimal_amount(
-            variant.price_override,
-            "Default variant price override must be a finite number.",
-            "Default variant price override cannot be negative.",
-        )
+        if variant.price_override is not UNSET:
+            CreateProductService._validate_decimal_amount(
+                variant.price_override,
+                "Default variant price override must be a finite number.",
+                "Default variant price override cannot be negative.",
+            )
 
     @staticmethod
     def _find_product_variant(product: Product, variant_id: int) -> ProductVariant:

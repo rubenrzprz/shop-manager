@@ -5,6 +5,7 @@ import pytest
 from app.application.dto.products import (
     CreateProductInput,
     CreateProductVariantInput,
+    UNSET,
     UpdateProductInput,
     UpdateProductVariantInput,
 )
@@ -109,6 +110,141 @@ def test_update_product_service_updates_product_and_default_variant(db_session):
     assert listed[0].name == "Camisa bordada"
     assert listed[0].supplier_name == "Updated Supplier"
     assert listed[0].variants[0].variant_name == "Default updated"
+
+
+def test_update_product_service_preserves_omitted_fields(db_session):
+    supplier = Supplier(name="Original Supplier")
+    db_session.add(supplier)
+    db_session.flush()
+
+    product = CreateProductService(db_session).execute(
+        CreateProductInput(
+            name="Camiseta tradicional",
+            supplier_id=supplier.id,
+            description="Original description",
+            base_price=Decimal("39.90"),
+            track_stock=True,
+            variants=[
+                CreateProductVariantInput(
+                    variant_name="Default",
+                    description="Original variant",
+                    size="M",
+                    color="White",
+                    price_override=Decimal("42.90"),
+                )
+            ],
+        )
+    )
+
+    default_variant = product.variants[0]
+
+    updated = UpdateProductService(db_session).execute(
+        product.id,
+        UpdateProductInput(
+            name="Camisa bordada",
+        ),
+    )
+
+    assert updated.name == "Camisa bordada"
+    assert updated.supplier_id == supplier.id
+    assert updated.description == "Original description"
+    assert updated.base_price == Decimal("39.90")
+    assert updated.track_stock is True
+    assert updated.variants[0].id == default_variant.id
+    assert updated.variants[0].variant_name == "Default"
+    assert updated.variants[0].description == "Original variant"
+    assert updated.variants[0].size == "M"
+    assert updated.variants[0].color == "White"
+    assert updated.variants[0].price_override == Decimal("42.90")
+
+
+def test_update_product_service_allows_explicitly_clearing_optional_fields(db_session):
+    supplier = Supplier(name="Original Supplier")
+    db_session.add(supplier)
+    db_session.flush()
+
+    product = CreateProductService(db_session).execute(
+        CreateProductInput(
+            name="Camiseta tradicional",
+            supplier_id=supplier.id,
+            description="Original description",
+            base_price=Decimal("39.90"),
+            track_stock=True,
+            variants=[
+                CreateProductVariantInput(
+                    variant_name="Default",
+                    description="Original variant",
+                    size="M",
+                    color="White",
+                    price_override=Decimal("42.90"),
+                )
+            ],
+        )
+    )
+
+    updated = UpdateProductService(db_session).execute(
+        product.id,
+        UpdateProductInput(
+            supplier_id=None,
+            description=None,
+            base_price=None,
+            default_variant=UpdateProductVariantInput(
+                variant_id=product.variants[0].id,
+                variant_name=None,
+                description=None,
+                size=None,
+                color=None,
+                price_override=None,
+            ),
+        ),
+    )
+
+    assert updated.supplier_id is None
+    assert updated.description is None
+    assert updated.base_price is None
+    assert updated.track_stock is True
+    assert updated.variants[0].variant_name is None
+    assert updated.variants[0].description is None
+    assert updated.variants[0].size is None
+    assert updated.variants[0].color is None
+    assert updated.variants[0].price_override is None
+
+
+def test_update_product_service_preserves_variant_fields_when_omitted(db_session):
+    product = CreateProductService(db_session).execute(
+        CreateProductInput(
+            name="Camiseta tradicional",
+            variants=[
+                CreateProductVariantInput(
+                    variant_name="Default",
+                    description="Original variant",
+                    size="M",
+                    color="White",
+                    price_override=Decimal("42.90"),
+                )
+            ],
+        )
+    )
+
+    updated = UpdateProductService(db_session).execute(
+        product.id,
+        UpdateProductInput(
+            default_variant=UpdateProductVariantInput(
+                variant_id=product.variants[0].id,
+                variant_name=UNSET,
+                description=UNSET,
+                size=UNSET,
+                color=UNSET,
+                price_override=UNSET,
+            ),
+        ),
+    )
+
+    assert updated.variants[0].variant_name == "Default"
+    assert updated.variants[0].description == "Original variant"
+    assert updated.variants[0].size == "M"
+    assert updated.variants[0].color == "White"
+    assert updated.variants[0].price_override == Decimal("42.90")
 
 
 def test_update_product_service_fails_when_product_does_not_exist(db_session):

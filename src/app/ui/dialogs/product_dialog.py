@@ -147,7 +147,8 @@ class ProductDialog(QDialog):
         supplier_id = self._supplier_combo.currentData()
         description = self._description_input.toPlainText().strip() or None
         track_stock = self._track_stock_checkbox.isChecked()
-        variant_name = self._variant_name_input.text().strip() or "Default"
+        raw_variant_name = self._variant_name_input.text().strip()
+        variant_name = raw_variant_name or ("Default" if self._product_id is None else None)
         variant_size = self._variant_size_input.text().strip() or None
         variant_color = self._variant_color_input.text().strip() or None
         variant_description = self._variant_description_input.toPlainText().strip() or None

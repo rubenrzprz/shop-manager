@@ -1,5 +1,13 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Final
+
+
+class _Unset:
+    pass
+
+
+UNSET: Final = _Unset()
 
 
 @dataclass(frozen=True)
@@ -27,19 +35,19 @@ class CreateProductInput:
 @dataclass(frozen=True)
 class UpdateProductVariantInput:
     variant_id: int
-    size: str | None = None
-    color: str | None = None
-    variant_name: str | None = None
-    description: str | None = None
-    price_override: Decimal | None = None
+    size: str | None | _Unset = UNSET
+    color: str | None | _Unset = UNSET
+    variant_name: str | None | _Unset = UNSET
+    description: str | None | _Unset = UNSET
+    price_override: Decimal | None | _Unset = UNSET
 
 @dataclass(frozen=True)
 class UpdateProductInput:
-    name: str
-    supplier_id: int | None = None
-    description: str | None = None
-    base_price: Decimal | None = None
-    track_stock: bool = False
+    name: str | _Unset = UNSET
+    supplier_id: int | None | _Unset = UNSET
+    description: str | None | _Unset = UNSET
+    base_price: Decimal | None | _Unset = UNSET
+    track_stock: bool | _Unset = UNSET
     default_variant: UpdateProductVariantInput | None = None
 
 @dataclass(frozen=True)
