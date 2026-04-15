@@ -1,5 +1,13 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Final
+
+
+class _Unset:
+    pass
+
+
+UNSET: Final = _Unset()
 
 
 @dataclass(frozen=True)
@@ -23,6 +31,51 @@ class CreateProductInput:
     track_stock: bool = False
     is_active: bool = True
     variants: list[CreateProductVariantInput] = field(default_factory=list)
+
+@dataclass(frozen=True)
+class UpdateProductVariantInput:
+    variant_id: int
+    size: str | None | _Unset = UNSET
+    color: str | None | _Unset = UNSET
+    variant_name: str | None | _Unset = UNSET
+    description: str | None | _Unset = UNSET
+    price_override: Decimal | None | _Unset = UNSET
+
+@dataclass(frozen=True)
+class UpdateProductInput:
+    name: str | _Unset = UNSET
+    supplier_id: int | None | _Unset = UNSET
+    description: str | None | _Unset = UNSET
+    base_price: Decimal | None | _Unset = UNSET
+    track_stock: bool | _Unset = UNSET
+    default_variant: UpdateProductVariantInput | None = None
+
+@dataclass(frozen=True)
+class ProductVariantEditItem:
+    id: int
+    sku: str
+    size: str | None
+    color: str | None
+    variant_name: str | None
+    description: str | None
+    price_override: Decimal | None
+    is_active: bool
+
+@dataclass(frozen=True)
+class ProductEditItem:
+    id: int
+    supplier_id: int | None
+    name: str
+    description: str | None
+    base_price: Decimal | None
+    track_stock: bool
+    is_active: bool
+    default_variant: ProductVariantEditItem
+
+@dataclass(frozen=True)
+class SupplierOption:
+    id: int
+    name: str
 
 @dataclass(frozen=True)
 class ProductVariantListItem:
