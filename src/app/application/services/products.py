@@ -226,3 +226,23 @@ class ListProductsService:
             )
 
         return result
+
+
+class ProductStatusService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, product_id: int, is_active: bool) -> Product:
+        product = self._session.get(Product, product_id)
+
+        if product is None:
+            raise ValueError("Product not found.")
+
+        if product.is_active == is_active:
+            status = "active" if is_active else "inactive"
+            raise ValueError(f"Product is already {status}.")
+
+        product.is_active = is_active
+        self._session.flush()
+
+        return product
