@@ -32,6 +32,9 @@ class ProductsPage(QWidget):
         self._create_button = QPushButton("New Product")
         self._create_button.clicked.connect(self.open_create_dialog)
 
+        self._edit_button = QPushButton("Edit Product")
+        self._edit_button.clicked.connect(self.open_edit_dialog)
+
         self._activate_button = QPushButton("Activate Product")
         self._activate_button.clicked.connect(self.activate_selected_product)
 
@@ -66,6 +69,7 @@ class ProductsPage(QWidget):
 
         actions_layout = QHBoxLayout()
         actions_layout.addWidget(self._create_button)
+        actions_layout.addWidget(self._edit_button)
         actions_layout.addWidget(self._activate_button)
         actions_layout.addWidget(self._deactivate_button)
         actions_layout.addWidget(self._refresh_button)
@@ -80,6 +84,21 @@ class ProductsPage(QWidget):
 
     def open_create_dialog(self) -> None:
         dialog = ProductDialog(self)
+        if dialog.exec():
+            self.load_products()
+
+    def open_edit_dialog(self) -> None:
+        product_id = self._selected_product_id()
+
+        if product_id is None:
+            QMessageBox.information(
+                self,
+                "No product selected",
+                "Select a product to edit.",
+            )
+            return
+
+        dialog = ProductDialog(self, product_id=product_id)
         if dialog.exec():
             self.load_products()
 

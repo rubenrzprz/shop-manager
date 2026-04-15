@@ -8,10 +8,16 @@ from sqlalchemy.orm import Session, selectinload, joinedload
 from app.application.dto.products import (
     CreateProductInput,
     CreateProductVariantInput,
+    ProductEditItem,
     ProductListItem,
+    ProductVariantEditItem,
     ProductVariantListItem,
+    SupplierOption,
+    UpdateProductInput,
+    UpdateProductVariantInput,
 )
 from app.infrastructure.db.models import Product, ProductVariant
+from app.infrastructure.db.models.suppliers import Supplier
 
 
 class CreateProductService:
@@ -226,6 +232,132 @@ class ListProductsService:
             )
 
         return result
+
+
+class ListProductFormSuppliersService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self) -> list[SupplierOption]:
+        statement = select(Supplier).order_by(Supplier.name)
+        suppliers = self._session.scalars(statement).all()
+
+        return [
+            SupplierOption(
+                id=supplier.id,
+                name=supplier.name,
+            )
+            for supplier in suppliers
+        ]
+
+
+class GetProductForEditService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, product_id: int) -> ProductEditItem:
+        product = self._session.get(
+            Product,
+            product_id,
+            options=[selectinload(Product.variants)],
+        )
+
+        if product is None:
+            raise ValueError("Product not found.")
+
+        default_variant = self._default_variant(product)
+
+        return ProductEditItem(
+            id=product.id,
+            supplier_id=product.supplier_id,
+            name=product.name,
+            description=product.description,
+            base_price=product.base_price,
+            track_stock=product.track_stock,
+            is_active=product.is_active,
+            default_variant=ProductVariantEditItem(
+                id=default_variant.id,
+                sku=default_variant.sku,
+                size=default_variant.size,
+                color=default_variant.color,
+                variant_name=default_variant.variant_name,
+                description=default_variant.description,
+                price_override=default_variant.price_override,
+                is_active=default_variant.is_active,
+            ),
+        )
+
+    @staticmethod
+    def _default_variant(product: Product) -> ProductVariant:
+        variants = sorted(product.variants, key=lambda variant: variant.id)
+
+        if not variants:
+            raise ValueError("Product has no variants.")
+
+        return variants[0]
+
+
+class UpdateProductService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, product_id: int, data: UpdateProductInput) -> Product:
+        self._validate_product_input(data)
+
+        product = self._session.get(
+            Product,
+            product_id,
+            options=[selectinload(Product.variants)],
+        )
+
+        if product is None:
+            raise ValueError("Product not found.")
+
+        product.supplier_id = data.supplier_id
+        product.name = data.name.strip()
+        product.description = data.description
+        product.base_price = data.base_price
+        product.track_stock = data.track_stock
+
+        if data.default_variant is not None:
+            variant = self._find_product_variant(product, data.default_variant.variant_id)
+            variant.size = data.default_variant.size
+            variant.color = data.default_variant.color
+            variant.variant_name = data.default_variant.variant_name
+            variant.description = data.default_variant.description
+            variant.price_override = data.default_variant.price_override
+
+        self._session.flush()
+
+        return product
+
+    def _validate_product_input(self, data: UpdateProductInput) -> None:
+        if not data.name or not data.name.strip():
+            raise ValueError("Product name is required.")
+
+        CreateProductService._validate_decimal_amount(
+            data.base_price,
+            "Product base price must be a finite number.",
+            "Product base price cannot be negative.",
+        )
+
+        if data.default_variant is not None:
+            self._validate_variant_input(data.default_variant)
+
+    def _validate_variant_input(self, variant: UpdateProductVariantInput) -> None:
+        CreateProductService._validate_decimal_amount(
+            variant.price_override,
+            "Default variant price override must be a finite number.",
+            "Default variant price override cannot be negative.",
+        )
+
+    @staticmethod
+    def _find_product_variant(product: Product, variant_id: int) -> ProductVariant:
+        for variant in product.variants:
+            if variant.id == variant_id:
+                return variant
+
+        raise ValueError("Product variant not found.")
 
 
 class ProductStatusService:
