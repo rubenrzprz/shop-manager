@@ -1,6 +1,7 @@
-from PySide6.QtWidgets import QMainWindow
+from PySide6.QtWidgets import QMainWindow, QTabWidget
 
 from app.ui.widgets.products_page import ProductsPage
+from app.ui.widgets.suppliers_page import SuppliersPage
 
 
 class MainWindow(QMainWindow):
@@ -10,5 +11,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Shop Manager")
         self.resize(1000, 600)
 
+        self._tabs = QTabWidget()
         self._products_page = ProductsPage()
-        self.setCentralWidget(self._products_page)
+        self._suppliers_page = SuppliersPage()
+
+        self._tabs.addTab(self._products_page, "Products")
+        self._tabs.addTab(self._suppliers_page, "Suppliers")
+
+        self.setCentralWidget(self._tabs)
