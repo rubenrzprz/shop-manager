@@ -16,6 +16,7 @@ from app.application.dto.products import (
     CreateProductInput,
     CreateProductVariantInput,
     ProductEditItem,
+    UNSET,
     UpdateProductInput,
     UpdateProductVariantInput,
 )
@@ -144,7 +145,7 @@ class ProductDialog(QDialog):
 
     def _on_accept(self) -> None:
         name = self._name_input.text().strip()
-        supplier_id = self._supplier_combo.currentData()
+        supplier_id = self._supplier_input_value()
         description = self._description_input.toPlainText().strip() or None
         track_stock = self._track_stock_checkbox.isChecked()
         raw_variant_name = self._variant_name_input.text().strip()
@@ -235,3 +236,9 @@ class ProductDialog(QDialog):
             raise ValueError(f"{field_label} must be a finite number.")
 
         return parsed
+
+    def _supplier_input_value(self):
+        if self._product_id is not None and not self._supplier_combo.isEnabled():
+            return UNSET
+
+        return self._supplier_combo.currentData()
