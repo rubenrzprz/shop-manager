@@ -32,6 +32,8 @@ from app.ui.dialogs.product_variant_picker_dialog import ProductVariantPickerDia
 
 class OrderDialog(QDialog):
     _UNSET_UNIT_PRICE = -0.01
+    _MAX_MONEY_AMOUNT = Decimal("99999999.99")
+    _MAX_QUANTITY = 999999
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -79,12 +81,12 @@ class OrderDialog(QDialog):
 
         self._quantity_input = QSpinBox()
         self._quantity_input.setMinimum(1)
-        self._quantity_input.setMaximum(9999)
+        self._quantity_input.setMaximum(self._MAX_QUANTITY)
         self._quantity_input.setValue(1)
 
         self._unit_price_input = QDoubleSpinBox()
         self._unit_price_input.setMinimum(0)
-        self._unit_price_input.setMaximum(9999.99)
+        self._unit_price_input.setMaximum(float(self._MAX_MONEY_AMOUNT))
         self._unit_price_input.setDecimals(2)
         self._unit_price_input.setSingleStep(0.01)
         self._unit_price_input.setPrefix("")
@@ -152,10 +154,11 @@ class OrderDialog(QDialog):
                 self._unit_price_input.setSpecialValueText("Enter price")
                 self._unit_price_input.setValue(self._UNSET_UNIT_PRICE)
             self._unit_price_input.blockSignals(False)
+            self._sync_quantity_limit()
             self._sync_discount_input_state()
 
     def _on_unit_price_changed(self, _value: float) -> None:
-        self._unit_price_is_inferred = False
+        self._sync_quantity_limit()
         self._sync_discount_input_state()
 
     def _sync_discount_input_state(self, *_args) -> None:
@@ -241,11 +244,23 @@ class OrderDialog(QDialog):
 
         return Decimal(str(self._unit_price_input.value())) * self._quantity_input.value()
 
+    def _sync_quantity_limit(self) -> None:
+        self._quantity_input.setMaximum(
+            self._quantity_max_for_unit_price(self._unit_price_value())
+        )
+
     def _unit_price_value(self) -> Decimal | None:
         if self._unit_price_input.value() < 0:
             return None
 
         return Decimal(str(self._unit_price_input.value()))
+
+    @classmethod
+    def _quantity_max_for_unit_price(cls, unit_price: Decimal | None) -> int:
+        if unit_price is None or unit_price == Decimal("0"):
+            return cls._MAX_QUANTITY
+
+        return max(1, min(cls._MAX_QUANTITY, int(cls._MAX_MONEY_AMOUNT // unit_price)))
 
     @staticmethod
     def _to_date(value: QDate) -> date:

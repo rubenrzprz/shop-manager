@@ -65,3 +65,11 @@ def test_order_dialog_unit_price_value_distinguishes_unset_from_explicit_zero():
 
     dialog._unit_price_input = FakeUnitPriceInput(0)
     assert dialog._unit_price_value() == Decimal("0")
+
+
+def test_order_dialog_quantity_limit_tracks_unit_price_without_underpricing():
+    assert OrderDialog._quantity_max_for_unit_price(None) == 999999
+    assert OrderDialog._quantity_max_for_unit_price(Decimal("0")) == 999999
+    assert OrderDialog._quantity_max_for_unit_price(Decimal("99999999.99")) == 1
+    assert OrderDialog._quantity_max_for_unit_price(Decimal("50000000.00")) == 1
+    assert OrderDialog._quantity_max_for_unit_price(Decimal("9999.99")) == 10000
