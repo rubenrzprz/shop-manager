@@ -124,7 +124,7 @@ class ProductVariantPickerDialog(QDialog):
                 QTableWidgetItem(variant.variant_name or ""),
                 QTableWidgetItem(variant.size or ""),
                 QTableWidgetItem(variant.color or ""),
-                QTableWidgetItem(f"{variant.price:.2f}"),
+                QTableWidgetItem(f"{variant.price:.2f}" if variant.price is not None else ""),
                 QTableWidgetItem(status_text),
             ]
 

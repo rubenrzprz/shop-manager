@@ -277,8 +277,7 @@ class ListProductVariantPickerOptionsService:
                 variant_name=variant.variant_name,
                 price=variant.price_override
                 if variant.price_override is not None
-                else variant.product.base_price
-                or Decimal("0.00"),
+                else variant.product.base_price,
                 product_is_active=variant.product.is_active,
                 variant_is_active=variant.is_active,
             )

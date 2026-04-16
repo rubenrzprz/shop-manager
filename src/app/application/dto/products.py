@@ -111,6 +111,6 @@ class ProductVariantPickerItem:
     size: str | None
     color: str | None
     variant_name: str | None
-    price: Decimal
+    price: Decimal | None
     product_is_active: bool
     variant_is_active: bool

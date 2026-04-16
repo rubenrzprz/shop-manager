@@ -36,6 +36,7 @@ class OrderDialog(QDialog):
 
         self._selected_customer: CustomerPickerItem | None = None
         self._selected_variant: ProductVariantPickerItem | None = None
+        self._unit_price_is_inferred = False
 
         self.setWindowTitle("Create Order")
         self.resize(620, 460)
@@ -85,7 +86,7 @@ class OrderDialog(QDialog):
         self._unit_price_input.setMaximum(999999.99)
         self._unit_price_input.setDecimals(2)
         self._unit_price_input.setPrefix("")
-        self._unit_price_input.valueChanged.connect(self._sync_discount_input_state)
+        self._unit_price_input.valueChanged.connect(self._on_unit_price_changed)
         self._quantity_input.valueChanged.connect(self._sync_discount_input_state)
 
         self._discount_type_input = QComboBox()
@@ -139,9 +140,23 @@ class OrderDialog(QDialog):
             self._variant_display.setText(
                 f"{self._selected_variant.product_name} / {self._selected_variant.sku}"
             )
-            self._unit_price_input.setValue(float(self._selected_variant.price))
+            if self._selected_variant.price is not None:
+                self._unit_price_is_inferred = False
+                self._unit_price_input.setValue(float(self._selected_variant.price))
+            else:
+                self._unit_price_input.blockSignals(True)
+                self._unit_price_is_inferred = True
+                self._unit_price_input.clear()
+                self._unit_price_input.setSpecialValueText("Enter price")
+                self._unit_price_input.setValue(0)
+                self._unit_price_input.blockSignals(False)
+            self._sync_discount_input_state()
 
-    def _sync_discount_input_state(self) -> None:
+    def _on_unit_price_changed(self, _value: float) -> None:
+        self._unit_price_is_inferred = False
+        self._sync_discount_input_state()
+
+    def _sync_discount_input_state(self, *_args) -> None:
         discount_type = self._discount_type_input.currentData()
         is_discounted = discount_type != DiscountType.NONE
         self._discount_value_input.setEnabled(is_discounted)
@@ -157,7 +172,7 @@ class OrderDialog(QDialog):
         subtotal = self._line_subtotal()
         self._discount_value_input.setMaximum(float(subtotal))
 
-    def _sync_deadline_constraints(self) -> None:
+    def _sync_deadline_constraints(self, *_args) -> None:
         order_date = self._order_date_input.date()
         self._deadline_input.setMinimumDate(order_date)
         self._deadline_input.setEnabled(self._has_deadline_checkbox.isChecked())
@@ -207,7 +222,7 @@ class OrderDialog(QDialog):
                 CreateOrderLineInput(
                     product_variant_id=self._selected_variant.id,
                     quantity=self._quantity_input.value(),
-                    unit_price=Decimal(str(self._unit_price_input.value())),
+                    unit_price=self._unit_price_value(),
                 )
             ],
         )
@@ -220,6 +235,12 @@ class OrderDialog(QDialog):
 
     def _line_subtotal(self) -> Decimal:
         return Decimal(str(self._unit_price_input.value())) * self._quantity_input.value()
+
+    def _unit_price_value(self) -> Decimal | None:
+        if self._unit_price_is_inferred:
+            return None
+
+        return Decimal(str(self._unit_price_input.value()))
 
     @staticmethod
     def _to_date(value: QDate) -> date:

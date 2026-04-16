@@ -107,3 +107,25 @@ def test_list_product_variant_picker_options_service_returns_variant_selection_d
     assert options[0].price == Decimal("54.50")
     assert options[0].product_is_active is True
     assert options[0].variant_is_active is True
+
+
+def test_list_product_variant_picker_options_service_preserves_missing_price(db_session):
+    product = CreateProductService(db_session).execute(
+        CreateProductInput(
+            name="Unpriced Product",
+            base_price=None,
+            variants=[
+                CreateProductVariantInput(
+                    sku="UNPRICED-001",
+                    variant_name="Default",
+                    price_override=None,
+                )
+            ],
+        )
+    )
+
+    options = ListProductVariantPickerOptionsService(db_session).execute()
+
+    assert len(options) == 1
+    assert options[0].id == product.variants[0].id
+    assert options[0].price is None
