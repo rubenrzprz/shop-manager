@@ -10,6 +10,7 @@ from app.application.services.customers import CreateCustomerService
 from app.application.services.orders import CreateOrderService, ListOrdersService
 from app.application.services.products import CreateProductService
 from app.domain.enums import CustomerType, DiscountType, OrderStatus
+from app.infrastructure.db.models import Order
 
 
 def create_customer(db_session, *, is_active: bool = True):
@@ -318,3 +319,38 @@ def test_create_order_service_rejects_invalid_discounts(db_session):
                 lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
             )
         )
+
+
+def test_create_order_service_rejects_deadline_before_order_date(db_session):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session)
+
+    with pytest.raises(ValueError, match="Order deadline cannot be earlier"):
+        CreateOrderService(db_session).execute(
+            CreateOrderInput(
+                customer_id=customer.id,
+                order_date=date(2026, 4, 16),
+                deadline=date(2026, 4, 15),
+                lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+            )
+        )
+
+
+def test_create_order_service_validation_failure_does_not_leave_pending_order(db_session):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session)
+
+    with pytest.raises(ValueError, match="Fixed discount cannot be greater than the subtotal."):
+        CreateOrderService(db_session).execute(
+            CreateOrderInput(
+                customer_id=customer.id,
+                order_date=date(2026, 4, 16),
+                discount_type=DiscountType.FIXED,
+                discount_value=Decimal("999.00"),
+                lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+            )
+        )
+
+    db_session.commit()
+
+    assert db_session.query(Order).count() == 0

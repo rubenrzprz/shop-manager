@@ -1,4 +1,5 @@
 from decimal import Decimal, ROUND_HALF_UP
+from dataclasses import dataclass
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -29,6 +30,20 @@ class CreateOrderService:
         if not customer.is_active:
             raise ValueError("Customer must be active to create an order.")
 
+        prepared_lines = self._prepare_order_lines(data.lines)
+        subtotal = self._money(sum(line.line_total for line in prepared_lines))
+        self._validate_discount_bounds(
+            subtotal,
+            data.discount_type,
+            data.discount_value,
+        )
+        discount_amount = self._discount_amount(
+            subtotal,
+            data.discount_type,
+            data.discount_value,
+        )
+        total_amount = self._money(subtotal - discount_amount)
+
         order = Order(
             order_number=f"PENDING-{uuid4()}",
             customer_id=customer.id,
@@ -44,38 +59,23 @@ class CreateOrderService:
         self._session.flush()
         order.order_number = self._order_number(order.id)
 
-        subtotal = Decimal("0.00")
         order_lines: list[OrderLine] = []
 
-        for index, line_data in enumerate(data.lines, start=1):
-            variant = self._load_valid_variant(line_data.product_variant_id, index)
-            unit_price = self._line_unit_price(line_data, variant, index)
-            line_total = self._money(unit_price * line_data.quantity)
-            subtotal += line_total
-
+        for prepared_line in prepared_lines:
             line = OrderLine(
                 order_id=order.id,
-                product_variant_id=variant.id,
-                quantity=line_data.quantity,
-                unit_price=unit_price,
-                line_total=line_total,
-                notes=line_data.notes,
+                product_variant_id=prepared_line.variant.id,
+                quantity=prepared_line.input.quantity,
+                unit_price=prepared_line.unit_price,
+                line_total=prepared_line.line_total,
+                notes=prepared_line.input.notes,
             )
             self._session.add(line)
             order_lines.append(line)
 
-        order.subtotal_amount = self._money(subtotal)
-        self._validate_discount_bounds(
-            order.subtotal_amount,
-            data.discount_type,
-            data.discount_value,
-        )
-        order.discount_amount = self._discount_amount(
-            order.subtotal_amount,
-            data.discount_type,
-            data.discount_value,
-        )
-        order.total_amount = self._money(order.subtotal_amount - order.discount_amount)
+        order.subtotal_amount = subtotal
+        order.discount_amount = discount_amount
+        order.total_amount = total_amount
 
         self._session.flush()
         order.lines = order_lines
@@ -85,6 +85,9 @@ class CreateOrderService:
     def _validate_order_input(self, data: CreateOrderInput) -> None:
         if not data.lines:
             raise ValueError("An order must have at least one line.")
+
+        if data.deadline is not None and data.deadline < data.order_date:
+            raise ValueError("Order deadline cannot be earlier than the order date.")
 
         self._validate_decimal_amount(
             data.discount_value,
@@ -107,6 +110,27 @@ class CreateOrderService:
                 f"Line #{index} unit price must be a finite number.",
                 f"Line #{index} unit price cannot be negative.",
             )
+
+    def _prepare_order_lines(
+        self,
+        lines: list[CreateOrderLineInput],
+    ) -> list["_PreparedOrderLine"]:
+        prepared_lines: list[_PreparedOrderLine] = []
+
+        for index, line_data in enumerate(lines, start=1):
+            variant = self._load_valid_variant(line_data.product_variant_id, index)
+            unit_price = self._line_unit_price(line_data, variant, index)
+            line_total = self._money(unit_price * line_data.quantity)
+            prepared_lines.append(
+                _PreparedOrderLine(
+                    input=line_data,
+                    variant=variant,
+                    unit_price=unit_price,
+                    line_total=line_total,
+                )
+            )
+
+        return prepared_lines
 
     def _load_valid_variant(self, variant_id: int, line_index: int) -> ProductVariant:
         variant = self._session.get(
@@ -188,6 +212,14 @@ class CreateOrderService:
     @staticmethod
     def _money(value: Decimal) -> Decimal:
         return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+@dataclass(frozen=True)
+class _PreparedOrderLine:
+    input: CreateOrderLineInput
+    variant: ProductVariant
+    unit_price: Decimal
+    line_total: Decimal
 
 
 class ListOrdersService:
