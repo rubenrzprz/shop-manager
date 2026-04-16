@@ -26,6 +26,7 @@ class CreateOrderService:
 
     def execute(self, data: CreateOrderInput) -> Order:
         self._validate_order_input(data)
+        discount_value = self._money(data.discount_value)
 
         customer = self._session.get(Customer, data.customer_id)
         if customer is None:
@@ -42,12 +43,12 @@ class CreateOrderService:
         self._validate_discount_bounds(
             subtotal,
             data.discount_type,
-            data.discount_value,
+            discount_value,
         )
         discount_amount = self._discount_amount(
             subtotal,
             data.discount_type,
-            data.discount_value,
+            discount_value,
         )
         total_amount = self._money(subtotal - discount_amount)
         self._validate_money_upper_bound(
@@ -66,7 +67,7 @@ class CreateOrderService:
             order_date=data.order_date,
             deadline=data.deadline,
             discount_type=data.discount_type,
-            discount_value=self._money(data.discount_value),
+            discount_value=discount_value,
             notes=data.notes,
         )
 

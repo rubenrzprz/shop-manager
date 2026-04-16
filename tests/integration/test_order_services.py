@@ -132,6 +132,30 @@ def test_create_order_service_supports_percentage_discount(db_session):
     assert order.total_amount == Decimal("140.00")
 
 
+def test_create_order_service_uses_normalized_percentage_discount_for_calculation(db_session):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session, base_price=Decimal("100.00"))
+
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            discount_type=DiscountType.PERCENTAGE,
+            discount_value=Decimal("12.345"),
+            lines=[
+                CreateOrderLineInput(
+                    product_variant_id=variant.id,
+                    quantity=1,
+                )
+            ],
+        )
+    )
+
+    assert order.discount_value == Decimal("12.35")
+    assert order.discount_amount == Decimal("12.35")
+    assert order.total_amount == Decimal("87.65")
+
+
 def test_list_orders_service_returns_orders_with_customer_and_lines(db_session):
     customer = create_customer(db_session)
     variant = create_product_variant(db_session, base_price=Decimal("49.90"))
