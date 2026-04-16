@@ -36,6 +36,7 @@ def test_get_product_for_edit_service_returns_product_with_default_variant(db_se
     result = GetProductForEditService(db_session).execute(product.id)
 
     assert result.id == product.id
+    assert result.supplier_name is None
     assert result.name == "Camiseta tradicional"
     assert result.default_variant.id == product.variants[0].id
     assert result.default_variant.variant_name == "Default"

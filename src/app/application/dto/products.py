@@ -65,6 +65,7 @@ class ProductVariantEditItem:
 class ProductEditItem:
     id: int
     supplier_id: int | None
+    supplier_name: str | None
     name: str
     description: str | None
     base_price: Decimal | None
