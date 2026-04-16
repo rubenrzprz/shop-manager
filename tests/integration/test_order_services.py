@@ -271,6 +271,51 @@ def test_create_order_service_rejects_invalid_lines_and_prices(db_session):
         )
 
 
+def test_create_order_service_rejects_amounts_above_db_numeric_limit(db_session):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session)
+    service = CreateOrderService(db_session)
+
+    with pytest.raises(ValueError, match="Line #1 total cannot be greater"):
+        service.execute(
+            CreateOrderInput(
+                customer_id=customer.id,
+                order_date=date(2026, 4, 16),
+                lines=[
+                    CreateOrderLineInput(
+                        product_variant_id=variant.id,
+                        quantity=2,
+                        unit_price=Decimal("50000000.00"),
+                    )
+                ],
+            )
+        )
+
+    with pytest.raises(ValueError, match="Order subtotal cannot be greater"):
+        service.execute(
+            CreateOrderInput(
+                customer_id=customer.id,
+                order_date=date(2026, 4, 16),
+                lines=[
+                    CreateOrderLineInput(
+                        product_variant_id=variant.id,
+                        quantity=1,
+                        unit_price=Decimal("50000000.00"),
+                    ),
+                    CreateOrderLineInput(
+                        product_variant_id=variant.id,
+                        quantity=1,
+                        unit_price=Decimal("50000000.00"),
+                    ),
+                ],
+            )
+        )
+
+    db_session.commit()
+
+    assert db_session.query(Order).count() == 0
+
+
 def test_create_order_service_rejects_invalid_discounts(db_session):
     customer = create_customer(db_session)
     variant = create_product_variant(db_session)

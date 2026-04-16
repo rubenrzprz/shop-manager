@@ -78,12 +78,12 @@ class OrderDialog(QDialog):
 
         self._quantity_input = QSpinBox()
         self._quantity_input.setMinimum(1)
-        self._quantity_input.setMaximum(999999)
+        self._quantity_input.setMaximum(9999)
         self._quantity_input.setValue(1)
 
         self._unit_price_input = QDoubleSpinBox()
         self._unit_price_input.setMinimum(0)
-        self._unit_price_input.setMaximum(999999.99)
+        self._unit_price_input.setMaximum(9999.99)
         self._unit_price_input.setDecimals(2)
         self._unit_price_input.setPrefix("")
         self._unit_price_input.valueChanged.connect(self._on_unit_price_changed)
@@ -97,7 +97,7 @@ class OrderDialog(QDialog):
 
         self._discount_value_input = QDoubleSpinBox()
         self._discount_value_input.setMinimum(0)
-        self._discount_value_input.setMaximum(999999.99)
+        self._discount_value_input.setMaximum(99999999.99)
         self._discount_value_input.setDecimals(2)
 
         self._notes_input = QPlainTextEdit()

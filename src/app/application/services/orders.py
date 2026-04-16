@@ -17,6 +17,9 @@ from app.infrastructure.db.models.orders import Order, OrderLine
 from app.infrastructure.db.models.products import ProductVariant
 
 
+MAX_MONEY_AMOUNT = Decimal("99999999.99")
+
+
 class CreateOrderService:
     def __init__(self, session: Session) -> None:
         self._session = session
@@ -32,6 +35,10 @@ class CreateOrderService:
 
         prepared_lines = self._prepare_order_lines(data.lines)
         subtotal = self._money(sum(line.line_total for line in prepared_lines))
+        self._validate_money_upper_bound(
+            subtotal,
+            "Order subtotal cannot be greater than 99999999.99.",
+        )
         self._validate_discount_bounds(
             subtotal,
             data.discount_type,
@@ -43,6 +50,14 @@ class CreateOrderService:
             data.discount_value,
         )
         total_amount = self._money(subtotal - discount_amount)
+        self._validate_money_upper_bound(
+            discount_amount,
+            "Order discount amount cannot be greater than 99999999.99.",
+        )
+        self._validate_money_upper_bound(
+            total_amount,
+            "Order total cannot be greater than 99999999.99.",
+        )
 
         order = Order(
             order_number=f"PENDING-{uuid4()}",
@@ -121,6 +136,10 @@ class CreateOrderService:
             variant = self._load_valid_variant(line_data.product_variant_id, index)
             unit_price = self._line_unit_price(line_data, variant, index)
             line_total = self._money(unit_price * line_data.quantity)
+            self._validate_money_upper_bound(
+                line_total,
+                f"Line #{index} total cannot be greater than 99999999.99.",
+            )
             prepared_lines.append(
                 _PreparedOrderLine(
                     input=line_data,
@@ -155,13 +174,23 @@ class CreateOrderService:
         line_index: int,
     ) -> Decimal:
         if line_data.unit_price is not None:
-            return self._money(line_data.unit_price)
+            unit_price = self._money(line_data.unit_price)
+            self._validate_money_upper_bound(
+                unit_price,
+                f"Line #{line_index} unit price cannot be greater than 99999999.99.",
+            )
+            return unit_price
 
         inferred_price = variant.price_override if variant.price_override is not None else variant.product.base_price
         if inferred_price is None:
             raise ValueError(f"Line #{line_index} unit price is required.")
 
-        return self._money(inferred_price)
+        unit_price = self._money(inferred_price)
+        self._validate_money_upper_bound(
+            unit_price,
+            f"Line #{line_index} unit price cannot be greater than 99999999.99.",
+        )
+        return unit_price
 
     @staticmethod
     def _order_number(order_id: int) -> str:
@@ -208,6 +237,11 @@ class CreateOrderService:
 
         if value < Decimal("0"):
             raise ValueError(negative_message)
+
+    @staticmethod
+    def _validate_money_upper_bound(value: Decimal, message: str) -> None:
+        if value > MAX_MONEY_AMOUNT:
+            raise ValueError(message)
 
     @staticmethod
     def _money(value: Decimal) -> Decimal:
