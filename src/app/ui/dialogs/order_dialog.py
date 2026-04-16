@@ -31,12 +31,13 @@ from app.ui.dialogs.product_variant_picker_dialog import ProductVariantPickerDia
 
 
 class OrderDialog(QDialog):
+    _UNSET_UNIT_PRICE = -0.01
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
 
         self._selected_customer: CustomerPickerItem | None = None
         self._selected_variant: ProductVariantPickerItem | None = None
-        self._unit_price_is_inferred = False
 
         self.setWindowTitle("Create Order")
         self.resize(620, 460)
@@ -85,6 +86,7 @@ class OrderDialog(QDialog):
         self._unit_price_input.setMinimum(0)
         self._unit_price_input.setMaximum(9999.99)
         self._unit_price_input.setDecimals(2)
+        self._unit_price_input.setSingleStep(0.01)
         self._unit_price_input.setPrefix("")
         self._unit_price_input.valueChanged.connect(self._on_unit_price_changed)
         self._quantity_input.valueChanged.connect(self._sync_discount_input_state)
@@ -140,16 +142,16 @@ class OrderDialog(QDialog):
             self._variant_display.setText(
                 f"{self._selected_variant.product_name} / {self._selected_variant.sku}"
             )
+            self._unit_price_input.blockSignals(True)
             if self._selected_variant.price is not None:
-                self._unit_price_is_inferred = False
+                self._unit_price_input.setMinimum(0)
+                self._unit_price_input.setSpecialValueText("")
                 self._unit_price_input.setValue(float(self._selected_variant.price))
             else:
-                self._unit_price_input.blockSignals(True)
-                self._unit_price_is_inferred = True
-                self._unit_price_input.clear()
+                self._unit_price_input.setMinimum(self._UNSET_UNIT_PRICE)
                 self._unit_price_input.setSpecialValueText("Enter price")
-                self._unit_price_input.setValue(0)
-                self._unit_price_input.blockSignals(False)
+                self._unit_price_input.setValue(self._UNSET_UNIT_PRICE)
+            self._unit_price_input.blockSignals(False)
             self._sync_discount_input_state()
 
     def _on_unit_price_changed(self, _value: float) -> None:
@@ -234,10 +236,13 @@ class OrderDialog(QDialog):
         return self._to_date(self._deadline_input.date())
 
     def _line_subtotal(self) -> Decimal:
+        if self._unit_price_input.value() < 0:
+            return Decimal("0.00")
+
         return Decimal(str(self._unit_price_input.value())) * self._quantity_input.value()
 
     def _unit_price_value(self) -> Decimal | None:
-        if self._unit_price_is_inferred:
+        if self._unit_price_input.value() < 0:
             return None
 
         return Decimal(str(self._unit_price_input.value()))

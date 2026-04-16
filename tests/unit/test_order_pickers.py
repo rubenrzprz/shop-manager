@@ -3,6 +3,7 @@ from decimal import Decimal
 from app.application.dto.customers import CustomerPickerItem
 from app.application.dto.products import ProductVariantPickerItem
 from app.domain.enums import CustomerType
+from app.ui.dialogs.order_dialog import OrderDialog
 from app.ui.dialogs.customer_picker_dialog import CustomerPickerDialog
 from app.ui.dialogs.product_variant_picker_dialog import ProductVariantPickerDialog
 
@@ -47,3 +48,20 @@ def test_product_variant_picker_filter_matches_product_sku_variant_size_and_colo
     assert ProductVariantPickerDialog._matches_variant(variant, "m")
     assert ProductVariantPickerDialog._matches_variant(variant, "white")
     assert not ProductVariantPickerDialog._matches_variant(variant, "supplier")
+
+
+def test_order_dialog_unit_price_value_distinguishes_unset_from_explicit_zero():
+    dialog = OrderDialog.__new__(OrderDialog)
+
+    class FakeUnitPriceInput:
+        def __init__(self, value: float) -> None:
+            self._value = value
+
+        def value(self) -> float:
+            return self._value
+
+    dialog._unit_price_input = FakeUnitPriceInput(-0.01)
+    assert dialog._unit_price_value() is None
+
+    dialog._unit_price_input = FakeUnitPriceInput(0)
+    assert dialog._unit_price_value() == Decimal("0")
