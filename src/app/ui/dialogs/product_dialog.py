@@ -2,31 +2,32 @@ from decimal import Decimal, InvalidOperation
 
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QHBoxLayout,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
+    QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from app.application.dto.products import (
     CreateProductInput,
     CreateProductVariantInput,
     ProductEditItem,
-    UNSET,
     UpdateProductInput,
     UpdateProductVariantInput,
 )
 from app.application.services.products import (
     CreateProductService,
     GetProductForEditService,
-    ListProductFormSuppliersService,
     UpdateProductService,
 )
 from app.infrastructure.db.session import SessionLocal
+from app.ui.dialogs.supplier_picker_dialog import SupplierPickerDialog
 
 
 class ProductDialog(QDialog):
@@ -35,13 +36,21 @@ class ProductDialog(QDialog):
 
         self._product_id = product_id
         self._product: ProductEditItem | None = None
+        self._selected_supplier_id: int | None = None
+        self._selected_supplier_name: str | None = None
 
         self.setWindowTitle("Edit Product" if self._product_id is not None else "Create Product")
         self.resize(500, 420)
 
         self._name_input = QLineEdit()
-        self._supplier_combo = QComboBox()
-        self._supplier_combo.addItem("No supplier", None)
+        self._supplier_display = QLineEdit()
+        self._supplier_display.setReadOnly(True)
+        self._supplier_display.setPlaceholderText("No supplier selected")
+        self._select_supplier_button = QPushButton("Select Supplier")
+        self._select_supplier_button.clicked.connect(self._open_supplier_picker)
+        self._clear_supplier_button = QPushButton("Clear")
+        self._clear_supplier_button.clicked.connect(self._clear_supplier)
+        self._supplier_widget = self._build_supplier_widget()
 
         self._description_input = QPlainTextEdit()
         self._description_input.setFixedHeight(90)
@@ -59,7 +68,7 @@ class ProductDialog(QDialog):
 
         form = QFormLayout()
         form.addRow("Name", self._name_input)
-        form.addRow("Supplier", self._supplier_combo)
+        form.addRow("Supplier", self._supplier_widget)
         form.addRow("Description", self._description_input)
         form.addRow("Base price", self._base_price_input)
         form.addRow("", self._track_stock_checkbox)
@@ -80,27 +89,18 @@ class ProductDialog(QDialog):
         layout.addWidget(self._buttons)
         self.setLayout(layout)
 
-        self._load_suppliers()
         if self._product_id is not None:
             self._load_product()
 
-    def _load_suppliers(self) -> None:
-        try:
-            session = SessionLocal()
-        except Exception as exc:
-            QMessageBox.critical(self, "Could not load suppliers", str(exc))
-            self._supplier_combo.setEnabled(False)
-            return
-
-        try:
-            suppliers = ListProductFormSuppliersService(session).execute()
-            for supplier in suppliers:
-                self._supplier_combo.addItem(supplier.name, supplier.id)
-        except Exception as exc:
-            QMessageBox.critical(self, "Could not load suppliers", str(exc))
-            self._supplier_combo.setEnabled(False)
-        finally:
-            session.close()
+    def _build_supplier_widget(self) -> QWidget:
+        widget = QWidget()
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._supplier_display)
+        layout.addWidget(self._select_supplier_button)
+        layout.addWidget(self._clear_supplier_button)
+        widget.setLayout(layout)
+        return widget
 
     def _load_product(self) -> None:
         if self._product_id is None:
@@ -124,7 +124,7 @@ class ProductDialog(QDialog):
 
     def _populate_product_form(self, product: ProductEditItem) -> None:
         self._name_input.setText(product.name)
-        self._select_supplier(product.supplier_id)
+        self._set_supplier(product.supplier_id, product.supplier_name)
         self._description_input.setPlainText(product.description or "")
         self._base_price_input.setText("" if product.base_price is None else str(product.base_price))
         self._track_stock_checkbox.setChecked(product.track_stock)
@@ -138,10 +138,19 @@ class ProductDialog(QDialog):
         )
         self._variant_description_input.setPlainText(variant.description or "")
 
-    def _select_supplier(self, supplier_id: int | None) -> None:
-        index = self._supplier_combo.findData(supplier_id)
-        if index >= 0:
-            self._supplier_combo.setCurrentIndex(index)
+    def _open_supplier_picker(self) -> None:
+        dialog = SupplierPickerDialog(self)
+        if dialog.exec() and dialog.selected_supplier is not None:
+            supplier = dialog.selected_supplier
+            self._set_supplier(supplier.id, supplier.name)
+
+    def _clear_supplier(self) -> None:
+        self._set_supplier(None, None)
+
+    def _set_supplier(self, supplier_id: int | None, supplier_name: str | None) -> None:
+        self._selected_supplier_id = supplier_id
+        self._selected_supplier_name = supplier_name
+        self._supplier_display.setText(supplier_name or "")
 
     def _on_accept(self) -> None:
         name = self._name_input.text().strip()
@@ -238,7 +247,4 @@ class ProductDialog(QDialog):
         return parsed
 
     def _supplier_input_value(self):
-        if self._product_id is not None and not self._supplier_combo.isEnabled():
-            return UNSET
-
-        return self._supplier_combo.currentData()
+        return self._selected_supplier_id

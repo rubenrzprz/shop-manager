@@ -6,6 +6,7 @@ from app.application.services.products import CreateProductService, ListProducts
 from app.application.services.suppliers import (
     CreateSupplierService,
     GetSupplierForEditService,
+    ListSupplierPickerOptionsService,
     ListSuppliersService,
     UpdateSupplierService,
 )
@@ -42,6 +43,28 @@ def test_list_suppliers_service_returns_suppliers_ordered_by_name(db_session):
     assert [supplier.name for supplier in suppliers] == ["Alpha Supplier", "Zeta Supplier"]
     assert suppliers[0].city == "La Laguna"
     assert suppliers[0].is_active is True
+
+
+def test_list_supplier_picker_options_service_returns_searchable_supplier_fields(db_session):
+    supplier = CreateSupplierService(db_session).execute(
+        CreateSupplierInput(
+            name="Tejidos Atlántico",
+            tax_id="B12345678",
+            phone="+34 600000000",
+            email="supplier@example.com",
+            city="La Orotava",
+        )
+    )
+
+    options = ListSupplierPickerOptionsService(db_session).execute()
+
+    assert len(options) == 1
+    assert options[0].id == supplier.id
+    assert options[0].name == "Tejidos Atlántico"
+    assert options[0].tax_id == "B12345678"
+    assert options[0].phone == "+34 600000000"
+    assert options[0].email == "supplier@example.com"
+    assert options[0].is_active is True
 
 
 def test_get_supplier_for_edit_service_returns_full_supplier_data(db_session):

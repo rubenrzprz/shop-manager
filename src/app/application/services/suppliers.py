@@ -5,6 +5,7 @@ from app.application.dto.suppliers import (
     CreateSupplierInput,
     SupplierEditItem,
     SupplierListItem,
+    SupplierPickerItem,
     UpdateSupplierInput,
 )
 from app.infrastructure.db.models.suppliers import Supplier
@@ -118,3 +119,24 @@ class GetSupplierForEditService:
             notes=supplier.notes,
             is_active=supplier.is_active,
         )
+
+
+class ListSupplierPickerOptionsService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self) -> list[SupplierPickerItem]:
+        statement = select(Supplier).order_by(Supplier.name, Supplier.id)
+        suppliers = self._session.scalars(statement).all()
+
+        return [
+            SupplierPickerItem(
+                id=supplier.id,
+                name=supplier.name,
+                tax_id=supplier.tax_id,
+                phone=supplier.phone,
+                email=supplier.email,
+                is_active=supplier.is_active,
+            )
+            for supplier in suppliers
+        ]

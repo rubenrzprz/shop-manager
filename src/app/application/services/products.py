@@ -260,7 +260,10 @@ class GetProductForEditService:
         product = self._session.get(
             Product,
             product_id,
-            options=[selectinload(Product.variants)],
+            options=[
+                joinedload(Product.supplier),
+                selectinload(Product.variants),
+            ],
         )
 
         if product is None:
@@ -271,6 +274,7 @@ class GetProductForEditService:
         return ProductEditItem(
             id=product.id,
             supplier_id=product.supplier_id,
+            supplier_name=product.supplier.name if product.supplier else None,
             name=product.name,
             description=product.description,
             base_price=product.base_price,
