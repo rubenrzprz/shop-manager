@@ -67,3 +67,15 @@ class CustomerEditItem:
     country: str | None
     notes: str | None
     is_active: bool
+
+
+@dataclass(frozen=True)
+class CustomerPickerItem:
+    id: int
+    customer_type: CustomerType
+    name: str
+    company_name: str | None
+    tax_id: str | None
+    phone: str | None
+    email: str | None
+    is_active: bool

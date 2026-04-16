@@ -5,6 +5,7 @@ from app.application.dto.customers import (
     CreateCustomerInput,
     CustomerEditItem,
     CustomerListItem,
+    CustomerPickerItem,
     UpdateCustomerInput,
 )
 from app.infrastructure.db.models.customers import Customer
@@ -126,3 +127,26 @@ class GetCustomerForEditService:
             notes=customer.notes,
             is_active=customer.is_active,
         )
+
+
+class ListCustomerPickerOptionsService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self) -> list[CustomerPickerItem]:
+        statement = select(Customer).order_by(Customer.name, Customer.id)
+        customers = self._session.scalars(statement).all()
+
+        return [
+            CustomerPickerItem(
+                id=customer.id,
+                customer_type=customer.customer_type,
+                name=customer.name,
+                company_name=customer.company_name,
+                tax_id=customer.tax_id,
+                phone=customer.phone,
+                email=customer.email,
+                is_active=customer.is_active,
+            )
+            for customer in customers
+        ]
