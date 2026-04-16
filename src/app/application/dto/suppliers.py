@@ -57,3 +57,13 @@ class SupplierEditItem:
     country: str | None
     notes: str | None
     is_active: bool
+
+
+@dataclass(frozen=True)
+class SupplierPickerItem:
+    id: int
+    name: str
+    tax_id: str | None
+    phone: str | None
+    email: str | None
+    is_active: bool
