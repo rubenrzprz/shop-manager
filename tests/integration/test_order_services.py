@@ -4,10 +4,15 @@ from decimal import Decimal
 import pytest
 
 from app.application.dto.customers import CreateCustomerInput
-from app.application.dto.orders import CreateOrderInput, CreateOrderLineInput
+from app.application.dto.orders import CreateOrderInput, CreateOrderLineInput, UpdateOrderInput
 from app.application.dto.products import CreateProductInput, CreateProductVariantInput
 from app.application.services.customers import CreateCustomerService
-from app.application.services.orders import CreateOrderService, ListOrdersService
+from app.application.services.orders import (
+    CreateOrderService,
+    GetOrderForEditService,
+    ListOrdersService,
+    UpdateOrderService,
+)
 from app.application.services.products import CreateProductService
 from app.domain.enums import CustomerType, DiscountType, OrderStatus
 from app.infrastructure.db.models import Order
@@ -186,6 +191,136 @@ def test_list_orders_service_returns_orders_with_customer_and_lines(db_session):
     assert orders[0].lines[0].sku == variant.sku
 
 
+def test_get_order_for_edit_service_returns_draft_order_details(db_session):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session, base_price=Decimal("49.90"))
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            deadline=date(2026, 4, 30),
+            notes="Draft notes",
+            lines=[
+                CreateOrderLineInput(
+                    product_variant_id=variant.id,
+                    quantity=2,
+                )
+            ],
+        )
+    )
+
+    edit_item = GetOrderForEditService(db_session).execute(order.id)
+
+    assert edit_item.id == order.id
+    assert edit_item.order_number == order.order_number
+    assert edit_item.customer_id == customer.id
+    assert edit_item.customer_name == "María Rodríguez"
+    assert edit_item.status == OrderStatus.DRAFT
+    assert edit_item.deadline == date(2026, 4, 30)
+    assert edit_item.notes == "Draft notes"
+    assert len(edit_item.lines) == 1
+    assert edit_item.lines[0].product_variant_id == variant.id
+    assert edit_item.lines[0].quantity == 2
+
+
+def test_update_order_service_updates_active_order_fields_lines_and_totals(db_session):
+    customer = create_customer(db_session)
+    replacement_customer = CreateCustomerService(db_session).execute(
+        CreateCustomerInput(
+            customer_type=CustomerType.INDIVIDUAL,
+            name="Carlos Pérez",
+            phone="+34 600000002",
+        )
+    )
+    original_variant = create_product_variant(db_session, base_price=Decimal("49.90"))
+    replacement_variant = create_product_variant(db_session, base_price=Decimal("25.00"))
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            lines=[
+                CreateOrderLineInput(
+                    product_variant_id=original_variant.id,
+                    quantity=1,
+                )
+            ],
+        )
+    )
+
+    order.status = OrderStatus.CONFIRMED
+    db_session.flush()
+
+    updated_order = UpdateOrderService(db_session).execute(
+        order.id,
+        UpdateOrderInput(
+            customer_id=replacement_customer.id,
+            order_date=date(2026, 4, 17),
+            deadline=date(2026, 5, 1),
+            discount_type=DiscountType.FIXED,
+            discount_value=Decimal("10.00"),
+            notes="Updated draft",
+            lines=[
+                CreateOrderLineInput(
+                    product_variant_id=replacement_variant.id,
+                    quantity=3,
+                ),
+                CreateOrderLineInput(
+                    product_variant_id=original_variant.id,
+                    quantity=1,
+                    unit_price=Decimal("5.00"),
+                ),
+            ],
+        ),
+    )
+
+    assert updated_order.id == order.id
+    assert updated_order.order_number == order.order_number
+    assert updated_order.customer_id == replacement_customer.id
+    assert updated_order.status == OrderStatus.CONFIRMED
+    assert updated_order.order_date == date(2026, 4, 17)
+    assert updated_order.deadline == date(2026, 5, 1)
+    assert updated_order.notes == "Updated draft"
+    assert updated_order.subtotal_amount == Decimal("80.00")
+    assert updated_order.discount_type == DiscountType.FIXED
+    assert updated_order.discount_value == Decimal("10.00")
+    assert updated_order.discount_amount == Decimal("10.00")
+    assert updated_order.total_amount == Decimal("70.00")
+    assert len(updated_order.lines) == 2
+    assert [line.product_variant_id for line in updated_order.lines] == [
+        replacement_variant.id,
+        original_variant.id,
+    ]
+    assert [line.quantity for line in updated_order.lines] == [3, 1]
+    assert [line.line_total for line in updated_order.lines] == [
+        Decimal("75.00"),
+        Decimal("5.00"),
+    ]
+
+
+def test_update_order_service_rejects_terminal_order(db_session):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session)
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+        )
+    )
+    order.status = OrderStatus.COMPLETED
+    db_session.flush()
+
+    with pytest.raises(ValueError, match="Only active orders can be edited."):
+        UpdateOrderService(db_session).execute(
+            order.id,
+            UpdateOrderInput(
+                customer_id=customer.id,
+                order_date=date(2026, 4, 16),
+                lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=2)],
+            ),
+        )
+
+
 def test_create_order_service_rejects_missing_or_inactive_customer(db_session):
     inactive_customer = create_customer(db_session, is_active=False)
     variant = create_product_variant(db_session)
@@ -227,9 +362,7 @@ def test_create_order_service_rejects_missing_or_inactive_variants(db_session):
             CreateOrderInput(
                 customer_id=customer.id,
                 order_date=date(2026, 4, 16),
-                lines=[
-                    CreateOrderLineInput(product_variant_id=inactive_variant.id, quantity=1)
-                ],
+                lines=[CreateOrderLineInput(product_variant_id=inactive_variant.id, quantity=1)],
             )
         )
 
