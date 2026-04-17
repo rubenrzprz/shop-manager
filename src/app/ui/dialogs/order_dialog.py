@@ -26,10 +26,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.application.dto.customers import CustomerPickerItem
-from app.application.dto.orders import CreateOrderInput, CreateOrderLineInput
+from app.application.dto.orders import CreateOrderInput, CreateOrderLineInput, UpdateOrderInput
 from app.application.dto.products import ProductVariantPickerItem
-from app.application.services.orders import CreateOrderService
+from app.application.services.orders import (
+    CreateOrderService,
+    GetOrderForEditService,
+    UpdateOrderService,
+)
 from app.domain.enums import DiscountType
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialogs.customer_picker_dialog import CustomerPickerDialog
@@ -41,14 +44,16 @@ class OrderDialog(QDialog):
     _MAX_MONEY_AMOUNT = Decimal("99999999.99")
     _MAX_QUANTITY = 999999
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, order_id: int | None = None) -> None:
         super().__init__(parent)
 
-        self._selected_customer: CustomerPickerItem | None = None
+        self._order_id = order_id
+        self._selected_customer_id: int | None = None
+        self._selected_customer_name: str | None = None
         self._selected_line_variant: ProductVariantPickerItem | None = None
         self._line_items: list[_OrderLineItem] = []
 
-        self.setWindowTitle("Create Order")
+        self.setWindowTitle("Edit Order" if self._order_id is not None else "Create Order")
         self.resize(820, 640)
 
         self._customer_display = QLineEdit()
@@ -192,11 +197,72 @@ class OrderDialog(QDialog):
         self._sync_discount_input_state()
         self._sync_deadline_constraints()
 
+        if self._order_id is not None:
+            self._load_order()
+
     def _open_customer_picker(self) -> None:
         dialog = CustomerPickerDialog(self)
         if dialog.exec() and dialog.selected_customer is not None:
-            self._selected_customer = dialog.selected_customer
-            self._customer_display.setText(self._selected_customer.name)
+            customer = dialog.selected_customer
+            self._set_customer(customer.id, customer.name)
+
+    def _set_customer(self, customer_id: int, customer_name: str) -> None:
+        self._selected_customer_id = customer_id
+        self._selected_customer_name = customer_name
+        self._customer_display.setText(customer_name)
+
+    def _load_order(self) -> None:
+        if self._order_id is None:
+            return
+
+        try:
+            session = SessionLocal()
+        except Exception as exc:
+            QMessageBox.critical(self, "Could not load order", str(exc))
+            self.reject()
+            return
+
+        try:
+            order = GetOrderForEditService(session).execute(self._order_id)
+            if not UpdateOrderService._can_edit_full_order(order.status):
+                raise ValueError("Only active orders can be edited.")
+
+            self._set_customer(order.customer_id, order.customer_name)
+            self._order_date_input.setDate(
+                QDate(order.order_date.year, order.order_date.month, order.order_date.day)
+            )
+            self._has_deadline_checkbox.setChecked(order.deadline is not None)
+            if order.deadline is not None:
+                self._deadline_input.setDate(
+                    QDate(order.deadline.year, order.deadline.month, order.deadline.day)
+                )
+            self._set_discount_type(order.discount_type)
+            self._discount_value_input.setValue(float(order.discount_value))
+            self._notes_input.setPlainText(order.notes or "")
+            self._line_items = [
+                _OrderLineItem(
+                    product_variant_id=line.product_variant_id,
+                    product_name=line.product_name,
+                    sku=line.sku,
+                    quantity=line.quantity,
+                    unit_price=line.unit_price,
+                )
+                for line in order.lines
+            ]
+            self._refresh_lines_table()
+            self._sync_deadline_constraints()
+            self._sync_discount_input_state()
+            self._sync_total_preview()
+        except Exception as exc:
+            QMessageBox.critical(self, "Could not load order", str(exc))
+            self.reject()
+        finally:
+            session.close()
+
+    def _set_discount_type(self, discount_type: DiscountType) -> None:
+        index = self._discount_type_input.findData(discount_type)
+        if index >= 0:
+            self._discount_type_input.setCurrentIndex(index)
 
     def _open_variant_picker(self) -> None:
         dialog = ProductVariantPickerDialog(self)
@@ -320,12 +386,12 @@ class OrderDialog(QDialog):
             self._deadline_input.setDate(order_date)
 
     def _on_accept(self) -> None:
-        if self._selected_customer is None:
+        if self._selected_customer_id is None:
             QMessageBox.information(self, "Missing customer", "Select a customer.")
             return
 
         try:
-            data = self._build_input()
+            data = self._build_input() if self._order_id is None else self._build_update_input()
         except ValueError as exc:
             QMessageBox.information(self, "Missing order data", str(exc))
             return
@@ -337,7 +403,10 @@ class OrderDialog(QDialog):
             return
 
         try:
-            CreateOrderService(session).execute(data)
+            if self._order_id is None:
+                CreateOrderService(session).execute(data)
+            else:
+                UpdateOrderService(session).execute(self._order_id, data)
             session.commit()
             self.accept()
         except Exception as exc:
@@ -347,11 +416,25 @@ class OrderDialog(QDialog):
             session.close()
 
     def _build_input(self) -> CreateOrderInput:
-        if self._selected_customer is None:
+        if self._selected_customer_id is None:
             raise ValueError("Select a customer.")
 
         return CreateOrderInput(
-            customer_id=self._selected_customer.id,
+            customer_id=self._selected_customer_id,
+            order_date=self._to_date(self._order_date_input.date()),
+            deadline=self._deadline_value(),
+            discount_type=self._discount_type_input.currentData(),
+            discount_value=Decimal(str(self._discount_value_input.value())),
+            notes=self._notes_input.toPlainText().strip() or None,
+            lines=self._build_line_inputs(),
+        )
+
+    def _build_update_input(self) -> UpdateOrderInput:
+        if self._selected_customer_id is None:
+            raise ValueError("Select a customer.")
+
+        return UpdateOrderInput(
+            customer_id=self._selected_customer_id,
             order_date=self._to_date(self._order_date_input.date()),
             deadline=self._deadline_value(),
             discount_type=self._discount_type_input.currentData(),

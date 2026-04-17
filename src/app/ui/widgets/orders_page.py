@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.application.dto.orders import OrderListItem
-from app.application.services.orders import ListOrdersService
+from app.application.services.orders import ListOrdersService, UpdateOrderService
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialogs.order_dialog import OrderDialog
 
@@ -22,11 +22,16 @@ class OrdersPage(QWidget):
     def __init__(self) -> None:
         super().__init__()
 
+        self._orders_by_id: dict[int, OrderListItem] = {}
+
         self._title_label = QLabel("Orders")
         self._title_label.setObjectName("pageTitle")
 
         self._create_button = QPushButton("New Order")
         self._create_button.clicked.connect(self.open_create_dialog)
+
+        self._edit_button = QPushButton("Edit Order")
+        self._edit_button.clicked.connect(self.open_edit_dialog)
 
         self._refresh_button = QPushButton("Refresh")
         self._refresh_button.clicked.connect(self.load_orders)
@@ -57,6 +62,7 @@ class OrdersPage(QWidget):
 
         actions_layout = QHBoxLayout()
         actions_layout.addWidget(self._create_button)
+        actions_layout.addWidget(self._edit_button)
         actions_layout.addWidget(self._refresh_button)
         actions_layout.addStretch()
 
@@ -68,6 +74,29 @@ class OrdersPage(QWidget):
 
     def open_create_dialog(self) -> None:
         dialog = OrderDialog(self)
+        if dialog.exec():
+            self.load_orders()
+
+    def open_edit_dialog(self) -> None:
+        selected_items = self._table.selectedItems()
+        if not selected_items:
+            QMessageBox.information(self, "No order selected", "Select an active order to edit.")
+            return
+
+        row = selected_items[0].row()
+        order_id = int(self._table.item(row, 0).text())
+        order = self._orders_by_id.get(order_id)
+        if order is None:
+            QMessageBox.information(self, "No order selected", "Select an active order to edit.")
+            return
+
+        if not UpdateOrderService._can_edit_full_order(order.status):
+            QMessageBox.information(
+                self, "Order cannot be edited", "Only active orders can be edited."
+            )
+            return
+
+        dialog = OrderDialog(self, order_id=order_id)
         if dialog.exec():
             self.load_orders()
 
@@ -95,6 +124,7 @@ class OrdersPage(QWidget):
         )
 
     def _populate_table(self, orders: list[OrderListItem]) -> None:
+        self._orders_by_id = {order.id: order for order in orders}
         self._table.setRowCount(len(orders))
 
         for row, order in enumerate(orders):
