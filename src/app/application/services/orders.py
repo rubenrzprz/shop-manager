@@ -8,17 +8,25 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.application.dto.orders import (
     CreateOrderInput,
     CreateOrderLineInput,
+    OrderEditItem,
     OrderLineListItem,
     OrderListItem,
+    UpdateOrderInput,
 )
 from app.domain.enums import DiscountType, OrderStatus
 from app.infrastructure.db.models.customers import Customer
 from app.infrastructure.db.models.orders import Order, OrderLine
 from app.infrastructure.db.models.products import ProductVariant
 
-
 MAX_MONEY_AMOUNT = Decimal("99999999.99")
 MAX_ORDER_LINE_QUANTITY = 999999
+STRICT_ORDER_WORKFLOW_ENABLED = False
+SIMPLE_EDITABLE_ORDER_STATUSES = {
+    OrderStatus.DRAFT,
+    OrderStatus.CONFIRMED,
+    OrderStatus.IN_PROGRESS,
+    OrderStatus.READY,
+}
 
 
 class CreateOrderService:
@@ -99,7 +107,7 @@ class CreateOrderService:
 
         return order
 
-    def _validate_order_input(self, data: CreateOrderInput) -> None:
+    def _validate_order_input(self, data: CreateOrderInput | UpdateOrderInput) -> None:
         if not data.lines:
             raise ValueError("An order must have at least one line.")
 
@@ -186,7 +194,11 @@ class CreateOrderService:
             )
             return unit_price
 
-        inferred_price = variant.price_override if variant.price_override is not None else variant.product.base_price
+        inferred_price = (
+            variant.price_override
+            if variant.price_override is not None
+            else variant.product.base_price
+        )
         if inferred_price is None:
             raise ValueError(f"Line #{line_index} unit price is required.")
 
@@ -259,6 +271,139 @@ class _PreparedOrderLine:
     variant: ProductVariant
     unit_price: Decimal
     line_total: Decimal
+
+
+class GetOrderForEditService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, order_id: int) -> OrderEditItem:
+        order = self._session.get(
+            Order,
+            order_id,
+            options=[
+                joinedload(Order.customer),
+                selectinload(Order.lines)
+                .joinedload(OrderLine.product_variant)
+                .joinedload(ProductVariant.product),
+            ],
+        )
+
+        if order is None:
+            raise ValueError("Order not found.")
+
+        return OrderEditItem(
+            id=order.id,
+            order_number=order.order_number,
+            customer_id=order.customer_id,
+            customer_name=order.customer.name,
+            status=order.status,
+            order_date=order.order_date,
+            deadline=order.deadline,
+            discount_type=order.discount_type,
+            discount_value=order.discount_value,
+            notes=order.notes,
+            lines=[
+                OrderLineListItem(
+                    id=line.id,
+                    product_variant_id=line.product_variant_id,
+                    product_name=line.product_variant.product.name,
+                    sku=line.product_variant.sku,
+                    quantity=line.quantity,
+                    unit_price=line.unit_price,
+                    line_total=line.line_total,
+                )
+                for line in sorted(order.lines, key=lambda order_line: order_line.id)
+            ],
+        )
+
+
+class UpdateOrderService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+        self._create_service = CreateOrderService(session)
+
+    def execute(self, order_id: int, data: UpdateOrderInput) -> Order:
+        self._create_service._validate_order_input(data)
+        discount_value = self._create_service._money(data.discount_value)
+
+        order = self._session.get(
+            Order,
+            order_id,
+            options=[selectinload(Order.lines)],
+        )
+        if order is None:
+            raise ValueError("Order not found.")
+
+        if not self._can_edit_full_order(order.status):
+            raise ValueError("Only active orders can be edited.")
+
+        customer = self._session.get(Customer, data.customer_id)
+        if customer is None:
+            raise ValueError("Customer not found.")
+        if not customer.is_active:
+            raise ValueError("Customer must be active to update an order.")
+
+        prepared_lines = self._create_service._prepare_order_lines(data.lines)
+        subtotal = self._create_service._money(sum(line.line_total for line in prepared_lines))
+        self._create_service._validate_money_upper_bound(
+            subtotal,
+            "Order subtotal cannot be greater than 99999999.99.",
+        )
+        self._create_service._validate_discount_bounds(
+            subtotal,
+            data.discount_type,
+            discount_value,
+        )
+        discount_amount = self._create_service._discount_amount(
+            subtotal,
+            data.discount_type,
+            discount_value,
+        )
+        total_amount = self._create_service._money(subtotal - discount_amount)
+        self._create_service._validate_money_upper_bound(
+            discount_amount,
+            "Order discount amount cannot be greater than 99999999.99.",
+        )
+        self._create_service._validate_money_upper_bound(
+            total_amount,
+            "Order total cannot be greater than 99999999.99.",
+        )
+
+        order.customer_id = customer.id
+        order.order_date = data.order_date
+        order.deadline = data.deadline
+        order.discount_type = data.discount_type
+        order.discount_value = discount_value
+        order.discount_amount = discount_amount
+        order.subtotal_amount = subtotal
+        order.total_amount = total_amount
+        order.notes = data.notes
+
+        order.lines.clear()
+        self._session.flush()
+
+        for prepared_line in prepared_lines:
+            order.lines.append(
+                OrderLine(
+                    product_variant_id=prepared_line.variant.id,
+                    quantity=prepared_line.input.quantity,
+                    unit_price=prepared_line.unit_price,
+                    line_total=prepared_line.line_total,
+                    notes=prepared_line.input.notes,
+                )
+            )
+
+        self._session.flush()
+
+        return order
+
+    @staticmethod
+    def _can_edit_full_order(status: OrderStatus) -> bool:
+        if STRICT_ORDER_WORKFLOW_ENABLED:
+            return status == OrderStatus.DRAFT
+
+        return status in SIMPLE_EDITABLE_ORDER_STATUSES
 
 
 class ListOrdersService:
