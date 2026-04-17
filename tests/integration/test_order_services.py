@@ -4,7 +4,12 @@ from decimal import Decimal
 import pytest
 
 from app.application.dto.customers import CreateCustomerInput
-from app.application.dto.orders import CreateOrderInput, CreateOrderLineInput, UpdateOrderInput
+from app.application.dto.orders import (
+    CreateOrderInput,
+    CreateOrderLineInput,
+    UpdateOrderInput,
+    UpdateOrderLineInput,
+)
 from app.application.dto.products import CreateProductInput, CreateProductVariantInput
 from app.application.services.customers import CreateCustomerService
 from app.application.services.orders import (
@@ -260,11 +265,11 @@ def test_update_order_service_updates_active_order_fields_lines_and_totals(db_se
             discount_value=Decimal("10.00"),
             notes="Updated draft",
             lines=[
-                CreateOrderLineInput(
+                UpdateOrderLineInput(
                     product_variant_id=replacement_variant.id,
                     quantity=3,
                 ),
-                CreateOrderLineInput(
+                UpdateOrderLineInput(
                     product_variant_id=original_variant.id,
                     quantity=1,
                     unit_price=Decimal("5.00"),
@@ -316,7 +321,85 @@ def test_update_order_service_rejects_terminal_order(db_session):
             UpdateOrderInput(
                 customer_id=customer.id,
                 order_date=date(2026, 4, 16),
-                lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=2)],
+                lines=[UpdateOrderLineInput(product_variant_id=variant.id, quantity=2)],
+            ),
+        )
+
+
+def test_update_order_service_allows_existing_inactive_variant_lines(db_session):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session, base_price=Decimal("49.90"))
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            lines=[
+                CreateOrderLineInput(
+                    product_variant_id=variant.id,
+                    quantity=2,
+                    notes="Keep measurement note",
+                )
+            ],
+        )
+    )
+    existing_line = order.lines[0]
+    variant.is_active = False
+    db_session.flush()
+
+    updated_order = UpdateOrderService(db_session).execute(
+        order.id,
+        UpdateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 17),
+            deadline=date(2026, 5, 1),
+            notes="Updated order notes",
+            lines=[
+                UpdateOrderLineInput(
+                    order_line_id=existing_line.id,
+                    product_variant_id=existing_line.product_variant_id,
+                    quantity=existing_line.quantity,
+                    unit_price=existing_line.unit_price,
+                    notes=existing_line.notes,
+                )
+            ],
+        ),
+    )
+
+    assert updated_order.order_date == date(2026, 4, 17)
+    assert updated_order.deadline == date(2026, 5, 1)
+    assert updated_order.notes == "Updated order notes"
+    assert len(updated_order.lines) == 1
+    assert updated_order.lines[0].product_variant_id == variant.id
+    assert updated_order.lines[0].notes == "Keep measurement note"
+    assert updated_order.subtotal_amount == Decimal("99.80")
+
+
+def test_update_order_service_revalidates_readded_inactive_variant_lines(db_session):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session, base_price=Decimal("49.90"))
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+        )
+    )
+    variant.is_active = False
+    db_session.flush()
+
+    with pytest.raises(ValueError, match="Line #1 product variant must be active."):
+        UpdateOrderService(db_session).execute(
+            order.id,
+            UpdateOrderInput(
+                customer_id=customer.id,
+                order_date=date(2026, 4, 16),
+                lines=[
+                    UpdateOrderLineInput(
+                        product_variant_id=variant.id,
+                        quantity=1,
+                        unit_price=Decimal("49.90"),
+                    )
+                ],
             ),
         )
 

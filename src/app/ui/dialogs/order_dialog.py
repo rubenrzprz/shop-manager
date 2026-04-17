@@ -26,7 +26,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.application.dto.orders import CreateOrderInput, CreateOrderLineInput, UpdateOrderInput
+from app.application.dto.orders import (
+    CreateOrderInput,
+    CreateOrderLineInput,
+    UpdateOrderInput,
+    UpdateOrderLineInput,
+)
 from app.application.dto.products import ProductVariantPickerItem
 from app.application.services.orders import (
     CreateOrderService,
@@ -239,11 +244,13 @@ class OrderDialog(QDialog):
             self._notes_input.setPlainText(order.notes or "")
             self._line_items = [
                 _OrderLineItem(
+                    order_line_id=line.id,
                     product_variant_id=line.product_variant_id,
                     product_name=line.product_name,
                     sku=line.sku,
                     quantity=line.quantity,
                     unit_price=line.unit_price,
+                    notes=line.notes,
                 )
                 for line in order.lines
             ]
@@ -290,11 +297,13 @@ class OrderDialog(QDialog):
 
         self._line_items.append(
             _OrderLineItem(
+                order_line_id=None,
                 product_variant_id=self._selected_line_variant.id,
                 product_name=self._selected_line_variant.product_name,
                 sku=self._selected_line_variant.sku,
                 quantity=self._quantity_input.value(),
                 unit_price=self._unit_price_value(),
+                notes=None,
             )
         )
         self._clear_line_composer()
@@ -440,7 +449,7 @@ class OrderDialog(QDialog):
             discount_type=self._discount_type_input.currentData(),
             discount_value=Decimal(str(self._discount_value_input.value())),
             notes=self._notes_input.toPlainText().strip() or None,
-            lines=self._build_line_inputs(),
+            lines=self._build_update_line_inputs(),
         )
 
     def _build_line_inputs(self) -> list[CreateOrderLineInput]:
@@ -448,6 +457,12 @@ class OrderDialog(QDialog):
             raise ValueError("Add at least one order line.")
 
         return [line_item.to_input() for line_item in self._line_items]
+
+    def _build_update_line_inputs(self) -> list[UpdateOrderLineInput]:
+        if not self._line_items:
+            raise ValueError("Add at least one order line.")
+
+        return [line_item.to_update_input() for line_item in self._line_items]
 
     def _deadline_value(self) -> date | None:
         if not self._has_deadline_checkbox.isChecked():
@@ -518,17 +533,29 @@ class OrderDialog(QDialog):
 
 @dataclass(frozen=True)
 class _OrderLineItem:
+    order_line_id: int | None
     product_variant_id: int
     product_name: str
     sku: str
     quantity: int
     unit_price: Decimal | None
+    notes: str | None
 
     def to_input(self) -> CreateOrderLineInput:
         return CreateOrderLineInput(
             product_variant_id=self.product_variant_id,
             quantity=self.quantity,
             unit_price=self.unit_price,
+            notes=self.notes,
+        )
+
+    def to_update_input(self) -> UpdateOrderLineInput:
+        return UpdateOrderLineInput(
+            order_line_id=self.order_line_id,
+            product_variant_id=self.product_variant_id,
+            quantity=self.quantity,
+            unit_price=self.unit_price,
+            notes=self.notes,
         )
 
     def subtotal(self) -> Decimal:

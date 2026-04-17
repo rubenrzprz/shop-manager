@@ -14,6 +14,15 @@ class CreateOrderLineInput:
 
 
 @dataclass(frozen=True)
+class UpdateOrderLineInput:
+    product_variant_id: int
+    quantity: int
+    unit_price: Decimal | None = None
+    notes: str | None = None
+    order_line_id: int | None = None
+
+
+@dataclass(frozen=True)
 class CreateOrderInput:
     customer_id: int
     order_date: date
@@ -32,7 +41,7 @@ class UpdateOrderInput:
     discount_type: DiscountType = DiscountType.NONE
     discount_value: Decimal = Decimal("0.00")
     notes: str | None = None
-    lines: list[CreateOrderLineInput] = field(default_factory=list)
+    lines: list[UpdateOrderLineInput] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -44,6 +53,7 @@ class OrderLineListItem:
     quantity: int
     unit_price: Decimal
     line_total: Decimal
+    notes: str | None
 
 
 @dataclass(frozen=True)

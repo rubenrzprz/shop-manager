@@ -11,6 +11,7 @@ from app.application.dto.orders import (
     OrderEditItem,
     OrderLineListItem,
     OrderListItem,
+    UpdateOrderLineInput,
     UpdateOrderInput,
 )
 from app.domain.enums import DiscountType, OrderStatus
@@ -146,23 +147,29 @@ class CreateOrderService:
         prepared_lines: list[_PreparedOrderLine] = []
 
         for index, line_data in enumerate(lines, start=1):
-            variant = self._load_valid_variant(line_data.product_variant_id, index)
-            unit_price = self._line_unit_price(line_data, variant, index)
-            line_total = self._money(unit_price * line_data.quantity)
-            self._validate_money_upper_bound(
-                line_total,
-                f"Line #{index} total cannot be greater than 99999999.99.",
-            )
-            prepared_lines.append(
-                _PreparedOrderLine(
-                    input=line_data,
-                    variant=variant,
-                    unit_price=unit_price,
-                    line_total=line_total,
-                )
-            )
+            prepared_lines.append(self._prepare_order_line(line_data, index))
 
         return prepared_lines
+
+    def _prepare_order_line(
+        self,
+        line_data: CreateOrderLineInput,
+        line_index: int,
+    ) -> "_PreparedOrderLine":
+        variant = self._load_valid_variant(line_data.product_variant_id, line_index)
+        unit_price = self._line_unit_price(line_data, variant, line_index)
+        line_total = self._money(unit_price * line_data.quantity)
+        self._validate_money_upper_bound(
+            line_total,
+            f"Line #{line_index} total cannot be greater than 99999999.99.",
+        )
+
+        return _PreparedOrderLine(
+            input=line_data,
+            variant=variant,
+            unit_price=unit_price,
+            line_total=line_total,
+        )
 
     def _load_valid_variant(self, variant_id: int, line_index: int) -> ProductVariant:
         variant = self._session.get(
@@ -268,7 +275,7 @@ class CreateOrderService:
 @dataclass(frozen=True)
 class _PreparedOrderLine:
     input: CreateOrderLineInput
-    variant: ProductVariant
+    variant: ProductVariant | None
     unit_price: Decimal
     line_total: Decimal
 
@@ -312,6 +319,7 @@ class GetOrderForEditService:
                     quantity=line.quantity,
                     unit_price=line.unit_price,
                     line_total=line.line_total,
+                    notes=line.notes,
                 )
                 for line in sorted(order.lines, key=lambda order_line: order_line.id)
             ],
@@ -344,7 +352,7 @@ class UpdateOrderService:
         if not customer.is_active:
             raise ValueError("Customer must be active to update an order.")
 
-        prepared_lines = self._create_service._prepare_order_lines(data.lines)
+        prepared_lines = self._prepare_order_lines(order, data.lines)
         subtotal = self._create_service._money(sum(line.line_total for line in prepared_lines))
         self._create_service._validate_money_upper_bound(
             subtotal,
@@ -386,7 +394,7 @@ class UpdateOrderService:
         for prepared_line in prepared_lines:
             order.lines.append(
                 OrderLine(
-                    product_variant_id=prepared_line.variant.id,
+                    product_variant_id=prepared_line.input.product_variant_id,
                     quantity=prepared_line.input.quantity,
                     unit_price=prepared_line.unit_price,
                     line_total=prepared_line.line_total,
@@ -404,6 +412,76 @@ class UpdateOrderService:
             return status == OrderStatus.DRAFT
 
         return status in SIMPLE_EDITABLE_ORDER_STATUSES
+
+    def _prepare_order_lines(
+        self,
+        order: Order,
+        lines: list[UpdateOrderLineInput],
+    ) -> list["_PreparedOrderLine"]:
+        existing_lines_by_id = {line.id: line for line in order.lines}
+        prepared_lines: list[_PreparedOrderLine] = []
+
+        for index, line_data in enumerate(lines, start=1):
+            existing_line = (
+                existing_lines_by_id.get(line_data.order_line_id)
+                if line_data.order_line_id is not None
+                else None
+            )
+
+            if (
+                existing_line is not None
+                and existing_line.product_variant_id == line_data.product_variant_id
+            ):
+                unit_price = self._line_unit_price_for_existing_line(line_data, existing_line)
+                line_total = self._create_service._money(unit_price * line_data.quantity)
+                self._create_service._validate_money_upper_bound(
+                    line_total,
+                    f"Line #{index} total cannot be greater than 99999999.99.",
+                )
+                prepared_lines.append(
+                    _PreparedOrderLine(
+                        input=CreateOrderLineInput(
+                            product_variant_id=line_data.product_variant_id,
+                            quantity=line_data.quantity,
+                            unit_price=unit_price,
+                            notes=line_data.notes,
+                        ),
+                        variant=None,
+                        unit_price=unit_price,
+                        line_total=line_total,
+                    )
+                )
+                continue
+
+            prepared_lines.append(
+                self._create_service._prepare_order_line(
+                    CreateOrderLineInput(
+                        product_variant_id=line_data.product_variant_id,
+                        quantity=line_data.quantity,
+                        unit_price=line_data.unit_price,
+                        notes=line_data.notes,
+                    ),
+                    index,
+                )
+            )
+
+        return prepared_lines
+
+    def _line_unit_price_for_existing_line(
+        self,
+        line_data: UpdateOrderLineInput,
+        existing_line: OrderLine,
+    ) -> Decimal:
+        unit_price = (
+            line_data.unit_price if line_data.unit_price is not None else existing_line.unit_price
+        )
+        unit_price = self._create_service._money(unit_price)
+        self._create_service._validate_money_upper_bound(
+            unit_price,
+            "Line unit price cannot be greater than 99999999.99.",
+        )
+
+        return unit_price
 
 
 class ListOrdersService:
@@ -446,6 +524,7 @@ class ListOrdersService:
                         quantity=line.quantity,
                         unit_price=line.unit_price,
                         line_total=line.line_total,
+                        notes=line.notes,
                     )
                     for line in sorted(order.lines, key=lambda order_line: order_line.id)
                 ],
