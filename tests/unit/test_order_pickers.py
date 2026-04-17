@@ -172,3 +172,54 @@ def test_order_dialog_total_preview_calculates_percentage_discount_with_money_ro
     assert preview.subtotal == Decimal("99.99")
     assert preview.discount_amount == Decimal("12.35")
     assert preview.total == Decimal("87.64")
+
+
+def test_order_dialog_fixed_discount_maximum_uses_loaded_line_subtotal():
+    dialog = OrderDialog.__new__(OrderDialog)
+    dialog._line_items = [
+        _OrderLineItem(
+            product_variant_id=11,
+            product_name="Traditional Shirt",
+            sku="SHIRT-001",
+            quantity=2,
+            unit_price=Decimal("10.00"),
+        )
+    ]
+
+    class FakeDiscountTypeInput:
+        def currentData(self):
+            return DiscountType.FIXED
+
+    class FakeDiscountValueInput:
+        def __init__(self) -> None:
+            self.maximum = None
+            self.value_value = 0
+            self.enabled = False
+
+        def setEnabled(self, value: bool) -> None:
+            self.enabled = value
+
+        def setMaximum(self, value: float) -> None:
+            self.maximum = value
+
+        def setValue(self, value: float) -> None:
+            self.value_value = min(value, self.maximum)
+
+        def value(self) -> float:
+            return self.value_value
+
+    class FakeLabel:
+        def setText(self, _value: str) -> None:
+            pass
+
+    dialog._discount_type_input = FakeDiscountTypeInput()
+    dialog._discount_value_input = FakeDiscountValueInput()
+    dialog._subtotal_value_label = FakeLabel()
+    dialog._discount_amount_value_label = FakeLabel()
+    dialog._total_value_label = FakeLabel()
+
+    dialog._sync_discount_input_state()
+    dialog._discount_value_input.setValue(5.0)
+
+    assert dialog._discount_value_input.maximum == 20.0
+    assert dialog._discount_value_input.value() == 5.0

@@ -236,8 +236,6 @@ class OrderDialog(QDialog):
                 self._deadline_input.setDate(
                     QDate(order.deadline.year, order.deadline.month, order.deadline.day)
                 )
-            self._set_discount_type(order.discount_type)
-            self._discount_value_input.setValue(float(order.discount_value))
             self._notes_input.setPlainText(order.notes or "")
             self._line_items = [
                 _OrderLineItem(
@@ -250,6 +248,8 @@ class OrderDialog(QDialog):
                 for line in order.lines
             ]
             self._refresh_lines_table()
+            self._set_discount_type(order.discount_type)
+            self._discount_value_input.setValue(float(order.discount_value))
             self._sync_deadline_constraints()
             self._sync_discount_input_state()
             self._sync_total_preview()
