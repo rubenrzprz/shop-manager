@@ -167,6 +167,7 @@ The project currently has these completed vertical slices:
 - Order Management v1
   - create draft orders
   - list orders
+  - edit active orders
   - customer picker
   - product variant picker
   - multi-line order creation UI
@@ -184,7 +185,15 @@ The project currently has these completed vertical slices:
 - Multi-line order creation uses a compact line composer plus an added-lines table.
 - Create order dialog previews subtotal, discount, and total before save; persisted totals remain
   service-calculated.
-- Order editing is deferred.
+- Active order editing supports updating customer/date/deadline/notes/discount/lines and
+  recalculates totals in the application layer.
+- Order line editing in the dialog is currently remove-and-readd; inline line editing is deferred.
+- `STRICT_ORDER_WORKFLOW_ENABLED` currently defaults to `False`; while disabled, active statuses
+  (`DRAFT`, `CONFIRMED`, `IN_PROGRESS`, `READY`) are editable with the same rules.
+- When strict order workflow is later enabled/configurable, non-draft statuses should get
+  status-specific editing rules instead of draft-like behavior.
+- A future settings slice should expose `strict_order_workflow_enabled` as a user-configurable
+  option instead of a code constant.
 - A fuller order workspace redesign is a future UI step: group customer/date fields, line table,
   line composer, totals/discount summary, and notes around order review/editing workflows.
 - Stock movements from orders are deferred.
@@ -194,18 +203,22 @@ The project currently has these completed vertical slices:
 
 When asked to propose the next logical step, consider this order:
 
-1. Draft order editing
-   - edit only `DRAFT` orders
-   - update customer/date/deadline/notes/lines
-   - recalculate totals in service
-2. Order status transitions
+1. Order status transitions
    - draft to confirmed
    - confirmed to in-progress/ready/completed/cancelled
    - enforce valid transitions in application layer
-3. Stock movements
+2. Settings for strict order workflow
+   - add a settings area for application behavior toggles
+   - expose `strict_order_workflow_enabled`
+   - keep current default simple workflow behavior unless changed
+3. Status-aware order editing rules
+   - decide which fields can change for confirmed/in-progress/ready orders when strict workflow is on
+   - preserve service-calculated totals and validation
+   - consider audit/history needs before stock workflows
+4. Stock movements
    - reduce stock when an order reaches the appropriate status
    - do not mix stock behavior into basic order create/list
-4. Shipment workflows
+5. Shipment workflows
    - create/update shipment info for orders
 
 Prefer one small vertical slice per branch.
