@@ -18,6 +18,7 @@ from app.infrastructure.db.models.products import ProductVariant
 
 
 MAX_MONEY_AMOUNT = Decimal("99999999.99")
+MAX_ORDER_LINE_QUANTITY = 999999
 
 
 class CreateOrderService:
@@ -120,6 +121,9 @@ class CreateOrderService:
         for index, line in enumerate(data.lines, start=1):
             if line.quantity <= 0:
                 raise ValueError(f"Line #{index} quantity must be positive.")
+
+            if line.quantity > MAX_ORDER_LINE_QUANTITY:
+                raise ValueError(f"Line #{index} quantity cannot be greater than 999999.")
 
             self._validate_decimal_amount(
                 line.unit_price,

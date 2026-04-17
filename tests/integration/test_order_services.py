@@ -270,6 +270,21 @@ def test_create_order_service_rejects_invalid_lines_and_prices(db_session):
             )
         )
 
+    with pytest.raises(ValueError, match="Line #1 quantity cannot be greater than 999999."):
+        service.execute(
+            CreateOrderInput(
+                customer_id=customer.id,
+                order_date=date(2026, 4, 16),
+                lines=[
+                    CreateOrderLineInput(
+                        product_variant_id=variant.id,
+                        quantity=1000000,
+                        unit_price=Decimal("0.00"),
+                    )
+                ],
+            )
+        )
+
     with pytest.raises(ValueError, match="Line #1 unit price cannot be negative."):
         service.execute(
             CreateOrderInput(
