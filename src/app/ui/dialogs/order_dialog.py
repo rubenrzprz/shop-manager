@@ -1,8 +1,10 @@
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
+from dataclasses import dataclass
 
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QDateEdit,
     QDialog,
@@ -10,6 +12,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -17,7 +20,10 @@ from PySide6.QtWidgets import (
     QPushButton,
     QCheckBox,
     QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
 from app.application.dto.customers import CustomerPickerItem
@@ -39,10 +45,11 @@ class OrderDialog(QDialog):
         super().__init__(parent)
 
         self._selected_customer: CustomerPickerItem | None = None
-        self._selected_variant: ProductVariantPickerItem | None = None
+        self._selected_line_variant: ProductVariantPickerItem | None = None
+        self._line_items: list[_OrderLineItem] = []
 
         self.setWindowTitle("Create Order")
-        self.resize(620, 460)
+        self.resize(820, 640)
 
         self._customer_display = QLineEdit()
         self._customer_display.setReadOnly(True)
@@ -83,15 +90,53 @@ class OrderDialog(QDialog):
         self._quantity_input.setMinimum(1)
         self._quantity_input.setMaximum(self._MAX_QUANTITY)
         self._quantity_input.setValue(1)
+        self._quantity_input.valueChanged.connect(self._sync_composer_quantity_limit)
 
         self._unit_price_input = QDoubleSpinBox()
         self._unit_price_input.setMinimum(0)
         self._unit_price_input.setMaximum(float(self._MAX_MONEY_AMOUNT))
         self._unit_price_input.setDecimals(2)
         self._unit_price_input.setSingleStep(0.01)
-        self._unit_price_input.setPrefix("")
-        self._unit_price_input.valueChanged.connect(self._on_unit_price_changed)
-        self._quantity_input.valueChanged.connect(self._sync_discount_input_state)
+        self._unit_price_input.valueChanged.connect(self._sync_composer_quantity_limit)
+
+        self._add_line_button = QPushButton("Add Line")
+        self._add_line_button.clicked.connect(self._add_line_from_composer)
+
+        composer_fields_layout = QHBoxLayout()
+        composer_fields_layout.addWidget(QLabel("Quantity"))
+        composer_fields_layout.addWidget(self._quantity_input)
+        composer_fields_layout.addWidget(QLabel("Unit price"))
+        composer_fields_layout.addWidget(self._unit_price_input)
+        composer_fields_layout.addStretch()
+        composer_fields_layout.addWidget(self._add_line_button)
+
+        self._line_composer = QWidget()
+        composer_layout = QVBoxLayout()
+        composer_layout.setContentsMargins(0, 0, 0, 0)
+        composer_layout.addLayout(variant_layout)
+        composer_layout.addLayout(composer_fields_layout)
+        self._line_composer.setLayout(composer_layout)
+
+        self._lines_table = QTableWidget()
+        self._lines_table.setColumnCount(6)
+        self._lines_table.setHorizontalHeaderLabels(
+            ["Product", "SKU", "Qty", "Unit Price", "Line Total", ""]
+        )
+        self._lines_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._lines_table.setSelectionMode(QAbstractItemView.NoSelection)
+        self._lines_table.verticalHeader().setVisible(False)
+        self._lines_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self._lines_table.setAlternatingRowColors(True)
+        self._lines_table.setMinimumHeight(170)
+
+        lines_header = self._lines_table.horizontalHeader()
+        lines_header.setSectionResizeMode(0, QHeaderView.Stretch)
+        lines_header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        lines_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        lines_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        lines_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        lines_header.setSectionResizeMode(5, QHeaderView.Fixed)
+        self._lines_table.setColumnWidth(5, 92)
 
         self._discount_type_input = QComboBox()
         self._discount_type_input.addItem("None", DiscountType.NONE)
@@ -103,6 +148,19 @@ class OrderDialog(QDialog):
         self._discount_value_input.setMinimum(0)
         self._discount_value_input.setMaximum(99999999.99)
         self._discount_value_input.setDecimals(2)
+        self._discount_value_input.valueChanged.connect(self._sync_total_preview)
+
+        self._subtotal_value_label = QLabel("0.00")
+        self._discount_amount_value_label = QLabel("0.00")
+        self._total_value_label = QLabel("0.00")
+
+        summary_layout = QFormLayout()
+        summary_layout.addRow("Subtotal", self._subtotal_value_label)
+        summary_layout.addRow("Discount", self._discount_amount_value_label)
+        summary_layout.addRow("Total", self._total_value_label)
+
+        self._summary_widget = QWidget()
+        self._summary_widget.setLayout(summary_layout)
 
         self._notes_input = QPlainTextEdit()
         self._notes_input.setFixedHeight(90)
@@ -111,12 +169,14 @@ class OrderDialog(QDialog):
         form.addRow("Customer", customer_layout)
         form.addRow("Order date", self._order_date_input)
         form.addRow("Deadline", deadline_layout)
-        form.addRow(QLabel("<b>Line</b>"))
-        form.addRow("Product variant", variant_layout)
-        form.addRow("Quantity", self._quantity_input)
-        form.addRow("Unit price", self._unit_price_input)
+        form.addRow(QLabel("<b>Add line</b>"))
+        form.addRow("Product variant", self._line_composer)
+        form.addRow(QLabel("<b>Lines</b>"))
+        form.addRow(self._lines_table)
         form.addRow("Discount type", self._discount_type_input)
         form.addRow("Discount value", self._discount_value_input)
+        form.addRow(QLabel("<b>Total preview</b>"))
+        form.addRow(self._summary_widget)
         form.addRow("Notes", self._notes_input)
 
         self._buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -128,6 +188,7 @@ class OrderDialog(QDialog):
         layout.addWidget(self._buttons)
         self.setLayout(layout)
 
+        self._refresh_lines_table()
         self._sync_discount_input_state()
         self._sync_deadline_constraints()
 
@@ -140,26 +201,86 @@ class OrderDialog(QDialog):
     def _open_variant_picker(self) -> None:
         dialog = ProductVariantPickerDialog(self)
         if dialog.exec() and dialog.selected_variant is not None:
-            self._selected_variant = dialog.selected_variant
+            self._selected_line_variant = dialog.selected_variant
             self._variant_display.setText(
-                f"{self._selected_variant.product_name} / {self._selected_variant.sku}"
+                f"{self._selected_line_variant.product_name} / {self._selected_line_variant.sku}"
             )
             self._unit_price_input.blockSignals(True)
-            if self._selected_variant.price is not None:
+            if self._selected_line_variant.price is not None:
                 self._unit_price_input.setMinimum(0)
                 self._unit_price_input.setSpecialValueText("")
-                self._unit_price_input.setValue(float(self._selected_variant.price))
+                self._unit_price_input.setValue(float(self._selected_line_variant.price))
             else:
                 self._unit_price_input.setMinimum(self._UNSET_UNIT_PRICE)
                 self._unit_price_input.setSpecialValueText("Enter price")
                 self._unit_price_input.setValue(self._UNSET_UNIT_PRICE)
             self._unit_price_input.blockSignals(False)
-            self._sync_quantity_limit()
-            self._sync_discount_input_state()
+            self._sync_composer_quantity_limit()
 
-    def _on_unit_price_changed(self, _value: float) -> None:
-        self._sync_quantity_limit()
+    def _add_line_from_composer(self) -> None:
+        if self._selected_line_variant is None:
+            QMessageBox.information(self, "Missing product variant", "Select a product variant.")
+            return
+
+        self._line_items.append(
+            _OrderLineItem(
+                product_variant_id=self._selected_line_variant.id,
+                product_name=self._selected_line_variant.product_name,
+                sku=self._selected_line_variant.sku,
+                quantity=self._quantity_input.value(),
+                unit_price=self._unit_price_value(),
+            )
+        )
+        self._clear_line_composer()
+        self._refresh_lines_table()
         self._sync_discount_input_state()
+        self._sync_total_preview()
+
+    def _remove_line_item(self, line_item: "_OrderLineItem") -> None:
+        self._line_items = [item for item in self._line_items if item is not line_item]
+        self._refresh_lines_table()
+        self._sync_discount_input_state()
+        self._sync_total_preview()
+
+    def _refresh_lines_table(self) -> None:
+        self._lines_table.setRowCount(len(self._line_items))
+
+        for row, line_item in enumerate(self._line_items):
+            items = [
+                QTableWidgetItem(line_item.product_name),
+                QTableWidgetItem(line_item.sku),
+                QTableWidgetItem(str(line_item.quantity)),
+                QTableWidgetItem(
+                    "" if line_item.unit_price is None else f"{line_item.unit_price:.2f}"
+                ),
+                QTableWidgetItem(f"{line_item.subtotal():.2f}"),
+            ]
+
+            for item in items:
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+
+            for column, item in enumerate(items):
+                self._lines_table.setItem(row, column, item)
+
+            remove_button = QPushButton("Remove")
+            remove_button.setMinimumWidth(76)
+            remove_button.clicked.connect(
+                lambda _checked=False, item=line_item: self._remove_line_item(item)
+            )
+            self._lines_table.setCellWidget(row, 5, remove_button)
+
+        self._lines_table.resizeRowsToContents()
+
+    def _clear_line_composer(self) -> None:
+        self._selected_line_variant = None
+        self._variant_display.clear()
+        self._unit_price_input.blockSignals(True)
+        self._unit_price_input.setMinimum(0)
+        self._unit_price_input.setSpecialValueText("")
+        self._unit_price_input.setValue(0)
+        self._unit_price_input.blockSignals(False)
+        self._quantity_input.setValue(1)
+        self._sync_composer_quantity_limit()
 
     def _sync_discount_input_state(self, *_args) -> None:
         discount_type = self._discount_type_input.currentData()
@@ -168,14 +289,27 @@ class OrderDialog(QDialog):
 
         if not is_discounted:
             self._discount_value_input.setValue(0)
+            self._sync_total_preview()
             return
 
         if discount_type == DiscountType.PERCENTAGE:
             self._discount_value_input.setMaximum(100)
+            self._sync_total_preview()
             return
 
         subtotal = self._line_subtotal()
         self._discount_value_input.setMaximum(float(subtotal))
+        self._sync_total_preview()
+
+    def _sync_total_preview(self, *_args) -> None:
+        preview = self._calculate_total_preview(
+            subtotal=self._line_subtotal(),
+            discount_type=self._discount_type_input.currentData(),
+            discount_value=Decimal(str(self._discount_value_input.value())),
+        )
+        self._subtotal_value_label.setText(f"{preview.subtotal:.2f}")
+        self._discount_amount_value_label.setText(f"{preview.discount_amount:.2f}")
+        self._total_value_label.setText(f"{preview.total:.2f}")
 
     def _sync_deadline_constraints(self, *_args) -> None:
         order_date = self._order_date_input.date()
@@ -190,11 +324,11 @@ class OrderDialog(QDialog):
             QMessageBox.information(self, "Missing customer", "Select a customer.")
             return
 
-        if self._selected_variant is None:
-            QMessageBox.information(self, "Missing product variant", "Select a product variant.")
+        try:
+            data = self._build_input()
+        except ValueError as exc:
+            QMessageBox.information(self, "Missing order data", str(exc))
             return
-
-        data = self._build_input()
 
         try:
             session = SessionLocal()
@@ -213,8 +347,8 @@ class OrderDialog(QDialog):
             session.close()
 
     def _build_input(self) -> CreateOrderInput:
-        if self._selected_customer is None or self._selected_variant is None:
-            raise ValueError("Customer and product variant are required.")
+        if self._selected_customer is None:
+            raise ValueError("Select a customer.")
 
         return CreateOrderInput(
             customer_id=self._selected_customer.id,
@@ -223,14 +357,14 @@ class OrderDialog(QDialog):
             discount_type=self._discount_type_input.currentData(),
             discount_value=Decimal(str(self._discount_value_input.value())),
             notes=self._notes_input.toPlainText().strip() or None,
-            lines=[
-                CreateOrderLineInput(
-                    product_variant_id=self._selected_variant.id,
-                    quantity=self._quantity_input.value(),
-                    unit_price=self._unit_price_value(),
-                )
-            ],
+            lines=self._build_line_inputs(),
         )
+
+    def _build_line_inputs(self) -> list[CreateOrderLineInput]:
+        if not self._line_items:
+            raise ValueError("Add at least one order line.")
+
+        return [line_item.to_input() for line_item in self._line_items]
 
     def _deadline_value(self) -> date | None:
         if not self._has_deadline_checkbox.isChecked():
@@ -239,21 +373,13 @@ class OrderDialog(QDialog):
         return self._to_date(self._deadline_input.date())
 
     def _line_subtotal(self) -> Decimal:
-        if self._unit_price_input.value() < 0:
-            return Decimal("0.00")
-
-        return Decimal(str(self._unit_price_input.value())) * self._quantity_input.value()
-
-    def _sync_quantity_limit(self) -> None:
-        self._quantity_input.setMaximum(
-            self._quantity_max_for_unit_price(self._unit_price_value())
+        return sum(
+            (line_item.subtotal() for line_item in self._line_items),
+            Decimal("0.00"),
         )
 
-    def _unit_price_value(self) -> Decimal | None:
-        if self._unit_price_input.value() < 0:
-            return None
-
-        return Decimal(str(self._unit_price_input.value()))
+    def _sync_composer_quantity_limit(self, *_args) -> None:
+        self._quantity_input.setMaximum(self._quantity_max_for_unit_price(self._unit_price_value()))
 
     @classmethod
     def _quantity_max_for_unit_price(cls, unit_price: Decimal | None) -> int:
@@ -263,5 +389,74 @@ class OrderDialog(QDialog):
         return max(1, min(cls._MAX_QUANTITY, int(cls._MAX_MONEY_AMOUNT // unit_price)))
 
     @staticmethod
+    def _unit_price_value_from_input(unit_price_input) -> Decimal | None:
+        if unit_price_input.value() < 0:
+            return None
+
+        return Decimal(str(unit_price_input.value()))
+
+    def _unit_price_value(self) -> Decimal | None:
+        return self._unit_price_value_from_input(self._unit_price_input)
+
+    @staticmethod
+    def _calculate_total_preview(
+        *,
+        subtotal: Decimal,
+        discount_type: DiscountType,
+        discount_value: Decimal,
+    ) -> "_OrderTotalPreview":
+        subtotal = OrderDialog._money(subtotal)
+        discount_value = OrderDialog._money(discount_value)
+
+        if discount_type == DiscountType.FIXED:
+            discount_amount = min(discount_value, subtotal)
+        elif discount_type == DiscountType.PERCENTAGE:
+            discount_amount = OrderDialog._money(subtotal * (discount_value / Decimal("100")))
+        else:
+            discount_amount = Decimal("0.00")
+
+        discount_amount = OrderDialog._money(min(discount_amount, subtotal))
+        total = OrderDialog._money(subtotal - discount_amount)
+
+        return _OrderTotalPreview(
+            subtotal=subtotal,
+            discount_amount=discount_amount,
+            total=total,
+        )
+
+    @staticmethod
+    def _money(value: Decimal) -> Decimal:
+        return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    @staticmethod
     def _to_date(value: QDate) -> date:
         return date(value.year(), value.month(), value.day())
+
+
+@dataclass(frozen=True)
+class _OrderLineItem:
+    product_variant_id: int
+    product_name: str
+    sku: str
+    quantity: int
+    unit_price: Decimal | None
+
+    def to_input(self) -> CreateOrderLineInput:
+        return CreateOrderLineInput(
+            product_variant_id=self.product_variant_id,
+            quantity=self.quantity,
+            unit_price=self.unit_price,
+        )
+
+    def subtotal(self) -> Decimal:
+        if self.unit_price is None:
+            return Decimal("0.00")
+
+        return self.unit_price * self.quantity
+
+
+@dataclass(frozen=True)
+class _OrderTotalPreview:
+    subtotal: Decimal
+    discount_amount: Decimal
+    total: Decimal

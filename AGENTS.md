@@ -169,7 +169,8 @@ The project currently has these completed vertical slices:
   - list orders
   - customer picker
   - product variant picker
-  - one order line in the v1 dialog
+  - multi-line order creation UI
+  - order total preview in create dialog
   - service-calculated totals
   - discount validation
   - deadline validation
@@ -180,9 +181,12 @@ The project currently has these completed vertical slices:
 - Products must have at least one variant.
 - Product editing is limited to core fields and the first/default variant.
 - Supplier/customer picker dialogs use one practical search box, not many field-specific filters.
-- Order Management v1 intentionally supports one line in the UI to keep the slice small.
+- Multi-line order creation uses a compact line composer plus an added-lines table.
+- Create order dialog previews subtotal, discount, and total before save; persisted totals remain
+  service-calculated.
 - Order editing is deferred.
-- Multi-line order UI is deferred.
+- A fuller order workspace redesign is a future UI step: group customer/date fields, line table,
+  line composer, totals/discount summary, and notes around order review/editing workflows.
 - Stock movements from orders are deferred.
 - Shipment workflows are deferred.
 
@@ -190,22 +194,18 @@ The project currently has these completed vertical slices:
 
 When asked to propose the next logical step, consider this order:
 
-1. Multi-line order creation UI
-   - add/remove multiple order lines in `OrderDialog`
-   - keep totals service-calculated
-   - preserve validation in `CreateOrderService`
-2. Draft order editing
+1. Draft order editing
    - edit only `DRAFT` orders
    - update customer/date/deadline/notes/lines
    - recalculate totals in service
-3. Order status transitions
+2. Order status transitions
    - draft to confirmed
    - confirmed to in-progress/ready/completed/cancelled
    - enforce valid transitions in application layer
-4. Stock movements
+3. Stock movements
    - reduce stock when an order reaches the appropriate status
    - do not mix stock behavior into basic order create/list
-5. Shipment workflows
+4. Shipment workflows
    - create/update shipment info for orders
 
 Prefer one small vertical slice per branch.
