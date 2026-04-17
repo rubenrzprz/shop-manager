@@ -78,6 +78,25 @@ Use branch names with conventional prefixes:
 
 Before editing for a new task, switch to a new branch unless the user says otherwise.
 
+## Keeping This File Current
+
+Treat `AGENTS.md` as living project memory, not a one-time snapshot.
+
+Update this file when a change affects future agent behavior or project understanding, especially when:
+
+- a new vertical slice is completed
+- the likely next step changes
+- a workflow acronym is added or changed
+- PR/body/commit conventions change
+- architecture rules change
+- important design decisions are made
+- testing requirements change
+- repeated review feedback reveals a new project rule
+
+Do not update it for every small implementation detail. Keep it concise and focused on durable context that will help a future session.
+
+When doing `capcp` or `capup`, consider whether `AGENTS.md` needs a small update before pushing. If it does, include that update in an appropriate atomic commit.
+
 ## Commit Style
 
 Use conventional commits:
@@ -226,4 +245,3 @@ The development style should favor:
 - UI that remains thin and service-driven
 - integration tests for real DB behavior
 - small, reviewable vertical slices
-
