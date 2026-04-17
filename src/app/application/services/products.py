@@ -10,6 +10,7 @@ from app.application.dto.products import (
     CreateProductVariantInput,
     ProductEditItem,
     ProductListItem,
+    ProductVariantPickerItem,
     ProductVariantEditItem,
     ProductVariantListItem,
     SupplierOption,
@@ -249,6 +250,38 @@ class ListProductFormSuppliersService:
                 name=supplier.name,
             )
             for supplier in suppliers
+        ]
+
+
+class ListProductVariantPickerOptionsService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self) -> list[ProductVariantPickerItem]:
+        statement = (
+            select(ProductVariant)
+            .join(ProductVariant.product)
+            .options(joinedload(ProductVariant.product))
+            .order_by(Product.name, ProductVariant.id)
+        )
+        variants = self._session.scalars(statement).all()
+
+        return [
+            ProductVariantPickerItem(
+                id=variant.id,
+                product_id=variant.product_id,
+                product_name=variant.product.name,
+                sku=variant.sku,
+                size=variant.size,
+                color=variant.color,
+                variant_name=variant.variant_name,
+                price=variant.price_override
+                if variant.price_override is not None
+                else variant.product.base_price,
+                product_is_active=variant.product.is_active,
+                variant_is_active=variant.is_active,
+            )
+            for variant in variants
         ]
 
 

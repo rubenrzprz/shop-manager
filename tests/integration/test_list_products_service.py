@@ -1,7 +1,11 @@
 from decimal import Decimal
 
 from app.application.dto.products import CreateProductInput, CreateProductVariantInput
-from app.application.services.products import CreateProductService, ListProductsService
+from app.application.services.products import (
+    CreateProductService,
+    ListProductVariantPickerOptionsService,
+    ListProductsService,
+)
 from app.infrastructure.db.models import Supplier
 
 
@@ -71,3 +75,57 @@ def test_list_products_service_returns_empty_list_when_no_products_exist(db_sess
     products = list_service.execute()
 
     assert products == []
+
+
+def test_list_product_variant_picker_options_service_returns_variant_selection_data(db_session):
+    product = CreateProductService(db_session).execute(
+        CreateProductInput(
+            name="Traditional Shirt",
+            base_price=Decimal("49.90"),
+            variants=[
+                CreateProductVariantInput(
+                    sku="SHIRT-001",
+                    variant_name="Size M / White",
+                    size="M",
+                    color="White",
+                    price_override=Decimal("54.50"),
+                )
+            ],
+        )
+    )
+
+    options = ListProductVariantPickerOptionsService(db_session).execute()
+
+    assert len(options) == 1
+    assert options[0].id == product.variants[0].id
+    assert options[0].product_id == product.id
+    assert options[0].product_name == "Traditional Shirt"
+    assert options[0].sku == "SHIRT-001"
+    assert options[0].variant_name == "Size M / White"
+    assert options[0].size == "M"
+    assert options[0].color == "White"
+    assert options[0].price == Decimal("54.50")
+    assert options[0].product_is_active is True
+    assert options[0].variant_is_active is True
+
+
+def test_list_product_variant_picker_options_service_preserves_missing_price(db_session):
+    product = CreateProductService(db_session).execute(
+        CreateProductInput(
+            name="Unpriced Product",
+            base_price=None,
+            variants=[
+                CreateProductVariantInput(
+                    sku="UNPRICED-001",
+                    variant_name="Default",
+                    price_override=None,
+                )
+            ],
+        )
+    )
+
+    options = ListProductVariantPickerOptionsService(db_session).execute()
+
+    assert len(options) == 1
+    assert options[0].id == product.variants[0].id
+    assert options[0].price is None

@@ -100,3 +100,17 @@ class ProductListItem:
     track_stock: bool
     is_active: bool
     variants: list[ProductVariantListItem]
+
+
+@dataclass(frozen=True)
+class ProductVariantPickerItem:
+    id: int
+    product_id: int
+    product_name: str
+    sku: str
+    size: str | None
+    color: str | None
+    variant_name: str | None
+    price: Decimal | None
+    product_is_active: bool
+    variant_is_active: bool

@@ -4,6 +4,7 @@ from app.application.dto.customers import CreateCustomerInput, UpdateCustomerInp
 from app.application.services.customers import (
     CreateCustomerService,
     GetCustomerForEditService,
+    ListCustomerPickerOptionsService,
     ListCustomersService,
     UpdateCustomerService,
 )
@@ -58,6 +59,32 @@ def test_list_customers_service_returns_customers_ordered_by_name(db_session):
     assert [customer.name for customer in customers] == ["Alpha Eventos", "Zoe Pérez"]
     assert customers[0].customer_type == CustomerType.COMPANY
     assert customers[0].is_active is True
+
+
+def test_list_customer_picker_options_service_returns_searchable_customer_fields(db_session):
+    customer = CreateCustomerService(db_session).execute(
+        CreateCustomerInput(
+            customer_type=CustomerType.COMPANY,
+            name="Eventos Atlántico",
+            company_name="Eventos Atlántico SL",
+            tax_id="B12345678",
+            phone="+34 600000001",
+            email="events@example.com",
+            city="La Laguna",
+        )
+    )
+
+    options = ListCustomerPickerOptionsService(db_session).execute()
+
+    assert len(options) == 1
+    assert options[0].id == customer.id
+    assert options[0].customer_type == CustomerType.COMPANY
+    assert options[0].name == "Eventos Atlántico"
+    assert options[0].company_name == "Eventos Atlántico SL"
+    assert options[0].tax_id == "B12345678"
+    assert options[0].phone == "+34 600000001"
+    assert options[0].email == "events@example.com"
+    assert options[0].is_active is True
 
 
 def test_get_customer_for_edit_service_returns_full_customer_data(db_session):
