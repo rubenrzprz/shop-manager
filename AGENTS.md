@@ -181,6 +181,10 @@ The project currently has these completed vertical slices:
   - typed settings service
   - settings tab
   - strict order workflow toggle
+- Spanish Localization v1
+  - `app_language` setting
+  - lightweight UI translation helper
+  - English/Spanish labels for current navigation, pages, dialogs, and common UI messages
 
 ## Current Design Decisions
 
@@ -201,11 +205,14 @@ The project currently has these completed vertical slices:
 - Application settings should be stored as typed application-level settings backed by a flexible
   key/value table, not as ad hoc UI constants or a generic user-editable key/value grid.
 - The settings UI should expose known typed controls, not a generic user-editable key/value grid.
-- Likely future settings include language (`app_language`), currency code, default order deadline
-  days, requiring order deadlines, default discount type, manual unit price override, cancelled
-  order reopen behavior, stock deduction status, allowing negative stock, and default customer type.
-- Spanish localization should happen soon after the settings foundation because the client is likely
-  to use the app in Spanish, and retrofitting translation becomes more expensive as the UI grows.
+- `app_language` is a typed setting. The UI currently supports English (`en`) and Spanish (`es`).
+- UI translation uses a lightweight dictionary helper keyed by source English text. Keep new UI text
+  routed through the helper instead of hardcoding final labels directly in widgets.
+- Service validation messages mostly remain final English strings for now. If deeper localization is
+  needed, introduce message codes before translating application-layer errors broadly.
+- Likely future settings include currency code, default order deadline days, requiring order
+  deadlines, default discount type, manual unit price override, cancelled order reopen behavior,
+  stock deduction status, allowing negative stock, and default customer type.
 - Order status transitions follow `DRAFT -> CONFIRMED -> IN_PROGRESS -> READY -> COMPLETED`.
 - Forward-path statuses can be reverted one step for accidental advances, including
   `COMPLETED -> READY`.
@@ -221,10 +228,10 @@ The project currently has these completed vertical slices:
 
 When asked to propose the next logical step, consider this order:
 
-1. Spanish localization support
-   - add localization infrastructure before the UI grows much further
-   - translate current navigation/pages/dialogs/messages into Spanish
-   - add `app_language` as a typed setting after the settings foundation exists
+1. Localization polish
+   - translate any newly added UI strings through the existing helper
+   - consider service-layer message codes if application validation errors need full localization
+   - consider broader formatting localization for currency/date display
 2. Status-aware order editing rules
    - decide which fields can change for confirmed/in-progress/ready orders when strict workflow is on
    - preserve service-calculated totals and validation
