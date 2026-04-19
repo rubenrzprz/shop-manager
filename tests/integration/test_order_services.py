@@ -17,6 +17,7 @@ from app.application.services.orders import (
     GetOrderForEditService,
     ListOrdersService,
     UpdateOrderService,
+    UpdateOrderStatusService,
 )
 from app.application.services.products import CreateProductService
 from app.domain.enums import CustomerType, DiscountType, OrderStatus
@@ -402,6 +403,115 @@ def test_update_order_service_revalidates_readded_inactive_variant_lines(db_sess
                 ],
             ),
         )
+
+
+def test_update_order_status_service_allows_forward_transitions(db_session):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session)
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+        )
+    )
+    service = UpdateOrderStatusService(db_session)
+
+    assert service.execute(order.id, OrderStatus.CONFIRMED).status == OrderStatus.CONFIRMED
+    assert service.execute(order.id, OrderStatus.IN_PROGRESS).status == OrderStatus.IN_PROGRESS
+    assert service.execute(order.id, OrderStatus.READY).status == OrderStatus.READY
+
+    completed_order = service.execute(order.id, OrderStatus.COMPLETED)
+
+    assert completed_order.status == OrderStatus.COMPLETED
+    assert completed_order.completed_at is not None
+
+
+def test_update_order_status_service_allows_reverting_forward_transitions(db_session):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session)
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+        )
+    )
+    service = UpdateOrderStatusService(db_session)
+
+    service.execute(order.id, OrderStatus.CONFIRMED)
+    service.execute(order.id, OrderStatus.IN_PROGRESS)
+    service.execute(order.id, OrderStatus.READY)
+    service.execute(order.id, OrderStatus.COMPLETED)
+
+    assert service.execute(order.id, OrderStatus.READY).status == OrderStatus.READY
+    assert service.execute(order.id, OrderStatus.IN_PROGRESS).status == OrderStatus.IN_PROGRESS
+    assert service.execute(order.id, OrderStatus.CONFIRMED).status == OrderStatus.CONFIRMED
+    assert service.execute(order.id, OrderStatus.DRAFT).status == OrderStatus.DRAFT
+
+
+@pytest.mark.parametrize(
+    "starting_status",
+    [
+        OrderStatus.DRAFT,
+        OrderStatus.CONFIRMED,
+        OrderStatus.IN_PROGRESS,
+        OrderStatus.READY,
+    ],
+)
+def test_update_order_status_service_allows_cancelling_active_orders(
+    db_session,
+    starting_status,
+):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session)
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+        )
+    )
+    order.status = starting_status
+    db_session.flush()
+
+    cancelled_order = UpdateOrderStatusService(db_session).execute(
+        order.id,
+        OrderStatus.CANCELLED,
+    )
+
+    assert cancelled_order.status == OrderStatus.CANCELLED
+
+
+@pytest.mark.parametrize(
+    ("starting_status", "target_status"),
+    [
+        (OrderStatus.DRAFT, OrderStatus.READY),
+        (OrderStatus.CONFIRMED, OrderStatus.COMPLETED),
+        (OrderStatus.COMPLETED, OrderStatus.CANCELLED),
+        (OrderStatus.CANCELLED, OrderStatus.DRAFT),
+        (OrderStatus.CANCELLED, OrderStatus.CONFIRMED),
+    ],
+)
+def test_update_order_status_service_rejects_invalid_transitions(
+    db_session,
+    starting_status,
+    target_status,
+):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session)
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+        )
+    )
+    order.status = starting_status
+    db_session.flush()
+
+    with pytest.raises(ValueError, match="Cannot transition order"):
+        UpdateOrderStatusService(db_session).execute(order.id, target_status)
 
 
 def test_create_order_service_rejects_missing_or_inactive_customer(db_session):
