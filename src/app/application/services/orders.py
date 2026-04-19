@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from dataclasses import dataclass
 from uuid import uuid4
@@ -27,6 +28,14 @@ SIMPLE_EDITABLE_ORDER_STATUSES = {
     OrderStatus.CONFIRMED,
     OrderStatus.IN_PROGRESS,
     OrderStatus.READY,
+}
+ORDER_STATUS_TRANSITIONS = {
+    OrderStatus.DRAFT: {OrderStatus.CONFIRMED, OrderStatus.CANCELLED},
+    OrderStatus.CONFIRMED: {OrderStatus.DRAFT, OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED},
+    OrderStatus.IN_PROGRESS: {OrderStatus.CONFIRMED, OrderStatus.READY, OrderStatus.CANCELLED},
+    OrderStatus.READY: {OrderStatus.IN_PROGRESS, OrderStatus.COMPLETED, OrderStatus.CANCELLED},
+    OrderStatus.COMPLETED: {OrderStatus.READY},
+    OrderStatus.CANCELLED: set(),
 }
 
 
@@ -482,6 +491,57 @@ class UpdateOrderService:
         )
 
         return unit_price
+
+
+class UpdateOrderStatusService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, order_id: int, target_status: OrderStatus) -> Order:
+        order = self._session.get(Order, order_id)
+        if order is None:
+            raise ValueError("Order not found.")
+
+        if not self.can_transition(order.status, target_status):
+            raise ValueError(
+                f"Cannot transition order from {order.status.value} to {target_status.value}."
+            )
+
+        order.status = target_status
+        if target_status == OrderStatus.COMPLETED:
+            order.completed_at = datetime.now(UTC)
+
+        self._session.flush()
+
+        return order
+
+    @classmethod
+    def can_transition(
+        cls,
+        current_status: OrderStatus,
+        target_status: OrderStatus,
+    ) -> bool:
+        return target_status in ORDER_STATUS_TRANSITIONS[current_status]
+
+    @classmethod
+    def next_forward_status(cls, current_status: OrderStatus) -> OrderStatus | None:
+        forward_transitions = {
+            OrderStatus.DRAFT: OrderStatus.CONFIRMED,
+            OrderStatus.CONFIRMED: OrderStatus.IN_PROGRESS,
+            OrderStatus.IN_PROGRESS: OrderStatus.READY,
+            OrderStatus.READY: OrderStatus.COMPLETED,
+        }
+        return forward_transitions.get(current_status)
+
+    @classmethod
+    def previous_status(cls, current_status: OrderStatus) -> OrderStatus | None:
+        reverse_transitions = {
+            OrderStatus.CONFIRMED: OrderStatus.DRAFT,
+            OrderStatus.IN_PROGRESS: OrderStatus.CONFIRMED,
+            OrderStatus.READY: OrderStatus.IN_PROGRESS,
+            OrderStatus.COMPLETED: OrderStatus.READY,
+        }
+        return reverse_transitions.get(current_status)
 
 
 class ListOrdersService:
