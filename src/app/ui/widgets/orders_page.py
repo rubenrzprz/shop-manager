@@ -108,6 +108,9 @@ class OrdersPage(QWidget):
 
         try:
             can_edit_order = UpdateOrderService(session).can_edit_full_order(order.status)
+        except Exception as exc:
+            QMessageBox.critical(self, "Could not check order edit policy", str(exc))
+            return
         finally:
             session.close()
 
