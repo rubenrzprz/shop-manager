@@ -15,6 +15,7 @@ from app.application.dto.orders import (
     UpdateOrderLineInput,
     UpdateOrderInput,
 )
+from app.application.services.settings import ApplicationSettingsService
 from app.domain.enums import DiscountType, OrderStatus
 from app.infrastructure.db.models.customers import Customer
 from app.infrastructure.db.models.orders import Order, OrderLine
@@ -22,7 +23,6 @@ from app.infrastructure.db.models.products import ProductVariant
 
 MAX_MONEY_AMOUNT = Decimal("99999999.99")
 MAX_ORDER_LINE_QUANTITY = 999999
-STRICT_ORDER_WORKFLOW_ENABLED = False
 SIMPLE_EDITABLE_ORDER_STATUSES = {
     OrderStatus.DRAFT,
     OrderStatus.CONFIRMED,
@@ -352,8 +352,9 @@ class UpdateOrderService:
         if order is None:
             raise ValueError("Order not found.")
 
-        if not self._can_edit_full_order(order.status):
-            raise ValueError("Only active orders can be edited.")
+        edit_rejection_message = self.full_order_edit_rejection_message(order.status)
+        if edit_rejection_message is not None:
+            raise ValueError(edit_rejection_message)
 
         customer = self._session.get(Customer, data.customer_id)
         if customer is None:
@@ -416,11 +417,29 @@ class UpdateOrderService:
         return order
 
     @staticmethod
-    def _can_edit_full_order(status: OrderStatus) -> bool:
-        if STRICT_ORDER_WORKFLOW_ENABLED:
+    def _can_edit_full_order(status: OrderStatus, *, strict_order_workflow_enabled: bool) -> bool:
+        if strict_order_workflow_enabled:
             return status == OrderStatus.DRAFT
 
         return status in SIMPLE_EDITABLE_ORDER_STATUSES
+
+    def can_edit_full_order(self, status: OrderStatus) -> bool:
+        return self.full_order_edit_rejection_message(status) is None
+
+    def full_order_edit_rejection_message(self, status: OrderStatus) -> str | None:
+        strict_order_workflow_enabled = ApplicationSettingsService(
+            self._session
+        ).strict_order_workflow_enabled()
+        if self._can_edit_full_order(
+            status,
+            strict_order_workflow_enabled=strict_order_workflow_enabled,
+        ):
+            return None
+
+        if strict_order_workflow_enabled:
+            return "Strict order workflow is enabled. Only draft orders can be fully edited."
+
+        return "Only active orders can be edited."
 
     def _prepare_order_lines(
         self,

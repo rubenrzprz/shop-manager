@@ -100,10 +100,24 @@ class OrdersPage(QWidget):
             QMessageBox.information(self, "No order selected", "Select an active order to edit.")
             return
 
-        if not UpdateOrderService._can_edit_full_order(order.status):
-            QMessageBox.information(
-                self, "Order cannot be edited", "Only active orders can be edited."
+        try:
+            session = SessionLocal()
+        except Exception as exc:
+            QMessageBox.critical(self, "Could not check order edit policy", str(exc))
+            return
+
+        try:
+            edit_rejection_message = UpdateOrderService(session).full_order_edit_rejection_message(
+                order.status
             )
+        except Exception as exc:
+            QMessageBox.critical(self, "Could not check order edit policy", str(exc))
+            return
+        finally:
+            session.close()
+
+        if edit_rejection_message is not None:
+            QMessageBox.information(self, "Order cannot be edited", edit_rejection_message)
             return
 
         dialog = OrderDialog(self, order_id=order.id)

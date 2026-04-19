@@ -176,6 +176,11 @@ The project currently has these completed vertical slices:
   - service-calculated totals
   - discount validation
   - deadline validation
+- Settings Management v1
+  - application settings table
+  - typed settings service
+  - settings tab
+  - strict order workflow toggle
 
 ## Current Design Decisions
 
@@ -189,12 +194,18 @@ The project currently has these completed vertical slices:
 - Active order editing supports updating customer/date/deadline/notes/discount/lines and
   recalculates totals in the application layer.
 - Order line editing in the dialog is currently remove-and-readd; inline line editing is deferred.
-- `STRICT_ORDER_WORKFLOW_ENABLED` currently defaults to `False`; while disabled, active statuses
-  (`DRAFT`, `CONFIRMED`, `IN_PROGRESS`, `READY`) are editable with the same rules.
+- `strict_order_workflow_enabled` defaults to `False`; while disabled, active statuses (`DRAFT`,
+  `CONFIRMED`, `IN_PROGRESS`, `READY`) are editable with the same rules.
 - When strict order workflow is later enabled/configurable, non-draft statuses should get
   status-specific editing rules instead of draft-like behavior.
-- A future settings slice should expose `strict_order_workflow_enabled` as a user-configurable
-  option instead of a code constant.
+- Application settings should be stored as typed application-level settings backed by a flexible
+  key/value table, not as ad hoc UI constants or a generic user-editable key/value grid.
+- The settings UI should expose known typed controls, not a generic user-editable key/value grid.
+- Likely future settings include language (`app_language`), currency code, default order deadline
+  days, requiring order deadlines, default discount type, manual unit price override, cancelled
+  order reopen behavior, stock deduction status, allowing negative stock, and default customer type.
+- Spanish localization should happen soon after the settings foundation because the client is likely
+  to use the app in Spanish, and retrofitting translation becomes more expensive as the UI grows.
 - Order status transitions follow `DRAFT -> CONFIRMED -> IN_PROGRESS -> READY -> COMPLETED`.
 - Forward-path statuses can be reverted one step for accidental advances, including
   `COMPLETED -> READY`.
@@ -210,10 +221,10 @@ The project currently has these completed vertical slices:
 
 When asked to propose the next logical step, consider this order:
 
-1. Settings for strict order workflow
-   - add a settings area for application behavior toggles
-   - expose `strict_order_workflow_enabled`
-   - keep current default simple workflow behavior unless changed
+1. Spanish localization support
+   - add localization infrastructure before the UI grows much further
+   - translate current navigation/pages/dialogs/messages into Spanish
+   - add `app_language` as a typed setting after the settings foundation exists
 2. Status-aware order editing rules
    - decide which fields can change for confirmed/in-progress/ready orders when strict workflow is on
    - preserve service-calculated totals and validation

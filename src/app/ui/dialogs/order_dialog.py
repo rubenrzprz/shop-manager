@@ -229,8 +229,11 @@ class OrderDialog(QDialog):
 
         try:
             order = GetOrderForEditService(session).execute(self._order_id)
-            if not UpdateOrderService._can_edit_full_order(order.status):
-                raise ValueError("Only active orders can be edited.")
+            edit_rejection_message = UpdateOrderService(session).full_order_edit_rejection_message(
+                order.status
+            )
+            if edit_rejection_message is not None:
+                raise ValueError(edit_rejection_message)
 
             self._set_customer(order.customer_id, order.customer_name)
             self._order_date_input.setDate(
