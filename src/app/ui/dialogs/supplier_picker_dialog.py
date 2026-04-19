@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
 from app.application.dto.suppliers import SupplierPickerItem
 from app.application.services.suppliers import ListSupplierPickerOptionsService
 from app.infrastructure.db.session import SessionLocal
+from app.ui.dialog_helpers import translate_button_box
+from app.ui.localization import t
 
 
 class SupplierPickerDialog(QDialog):
@@ -25,16 +27,18 @@ class SupplierPickerDialog(QDialog):
         self._suppliers: list[SupplierPickerItem] = []
         self._selected_supplier: SupplierPickerItem | None = None
 
-        self.setWindowTitle("Select Supplier")
+        self.setWindowTitle(t("Select Supplier"))
         self.resize(700, 420)
 
         self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText("Search by name, tax ID, phone, or email")
+        self._search_input.setPlaceholderText(t("Search by name, tax ID, phone, or email"))
         self._search_input.textChanged.connect(self._apply_filter)
 
         self._table = QTableWidget()
         self._table.setColumnCount(6)
-        self._table.setHorizontalHeaderLabels(["ID", "Name", "Tax ID", "Phone", "Email", "Status"])
+        self._table.setHorizontalHeaderLabels(
+            [t("ID"), t("Name"), t("Tax ID"), t("Phone"), t("Email"), t("Status")]
+        )
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -51,11 +55,12 @@ class SupplierPickerDialog(QDialog):
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
 
         self._buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        translate_button_box(self._buttons)
         self._buttons.accepted.connect(self._accept_selected_supplier)
         self._buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout()
-        layout.addWidget(QLabel("Supplier"))
+        layout.addWidget(QLabel(t("Supplier")))
         layout.addWidget(self._search_input)
         layout.addWidget(self._table)
         layout.addWidget(self._buttons)
@@ -71,23 +76,21 @@ class SupplierPickerDialog(QDialog):
         try:
             session = SessionLocal()
         except Exception as exc:
-            QMessageBox.critical(self, "Could not load suppliers", str(exc))
+            QMessageBox.critical(self, t("Could not load suppliers"), str(exc))
             return
 
         try:
             self._suppliers = ListSupplierPickerOptionsService(session).execute()
             self._apply_filter()
         except Exception as exc:
-            QMessageBox.critical(self, "Could not load suppliers", str(exc))
+            QMessageBox.critical(self, t("Could not load suppliers"), str(exc))
         finally:
             session.close()
 
     def _apply_filter(self) -> None:
         query = self._search_input.text().strip().lower()
         suppliers = [
-            supplier
-            for supplier in self._suppliers
-            if self._matches_supplier(supplier, query)
+            supplier for supplier in self._suppliers if self._matches_supplier(supplier, query)
         ]
 
         self._populate_table(suppliers)
@@ -110,7 +113,7 @@ class SupplierPickerDialog(QDialog):
         self._table.setRowCount(len(suppliers))
 
         for row, supplier in enumerate(suppliers):
-            status_text = "Active" if supplier.is_active else "Inactive"
+            status_text = t("Active") if supplier.is_active else t("Inactive")
             items = [
                 QTableWidgetItem(str(supplier.id)),
                 QTableWidgetItem(supplier.name),
@@ -136,8 +139,8 @@ class SupplierPickerDialog(QDialog):
         if supplier is None:
             QMessageBox.information(
                 self,
-                "No supplier selected",
-                "Select a supplier.",
+                t("No supplier selected"),
+                t("Select a supplier."),
             )
             return
 

@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
 from app.application.dto.customers import CustomerPickerItem
 from app.application.services.customers import ListCustomerPickerOptionsService
 from app.infrastructure.db.session import SessionLocal
+from app.ui.dialog_helpers import translate_button_box
+from app.ui.localization import t
 
 
 class CustomerPickerDialog(QDialog):
@@ -25,17 +27,17 @@ class CustomerPickerDialog(QDialog):
         self._customers: list[CustomerPickerItem] = []
         self._selected_customer: CustomerPickerItem | None = None
 
-        self.setWindowTitle("Select Customer")
+        self.setWindowTitle(t("Select Customer"))
         self.resize(760, 420)
 
         self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText("Search by name, company, tax ID, phone, or email")
+        self._search_input.setPlaceholderText(t("Search by name, company, tax ID, phone, or email"))
         self._search_input.textChanged.connect(self._apply_filter)
 
         self._table = QTableWidget()
         self._table.setColumnCount(7)
         self._table.setHorizontalHeaderLabels(
-            ["ID", "Type", "Name", "Company", "Tax ID", "Phone", "Status"]
+            [t("ID"), t("Type"), t("Name"), t("Company"), t("Tax ID"), t("Phone"), t("Status")]
         )
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -54,11 +56,12 @@ class CustomerPickerDialog(QDialog):
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
 
         self._buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        translate_button_box(self._buttons)
         self._buttons.accepted.connect(self._accept_selected_customer)
         self._buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout()
-        layout.addWidget(QLabel("Customer"))
+        layout.addWidget(QLabel(t("Customer")))
         layout.addWidget(self._search_input)
         layout.addWidget(self._table)
         layout.addWidget(self._buttons)
@@ -74,23 +77,21 @@ class CustomerPickerDialog(QDialog):
         try:
             session = SessionLocal()
         except Exception as exc:
-            QMessageBox.critical(self, "Could not load customers", str(exc))
+            QMessageBox.critical(self, t("Could not load customers"), str(exc))
             return
 
         try:
             self._customers = ListCustomerPickerOptionsService(session).execute()
             self._apply_filter()
         except Exception as exc:
-            QMessageBox.critical(self, "Could not load customers", str(exc))
+            QMessageBox.critical(self, t("Could not load customers"), str(exc))
         finally:
             session.close()
 
     def _apply_filter(self) -> None:
         query = self._search_input.text().strip().lower()
         customers = [
-            customer
-            for customer in self._customers
-            if self._matches_customer(customer, query)
+            customer for customer in self._customers if self._matches_customer(customer, query)
         ]
 
         self._populate_table(customers)
@@ -114,10 +115,11 @@ class CustomerPickerDialog(QDialog):
         self._table.setRowCount(len(customers))
 
         for row, customer in enumerate(customers):
-            status_text = "Active" if customer.is_active else "Inactive"
+            status_text = t("Active") if customer.is_active else t("Inactive")
+            customer_type_text = t(customer.customer_type.value.title())
             items = [
                 QTableWidgetItem(str(customer.id)),
-                QTableWidgetItem(customer.customer_type.value.title()),
+                QTableWidgetItem(customer_type_text),
                 QTableWidgetItem(customer.name),
                 QTableWidgetItem(customer.company_name or ""),
                 QTableWidgetItem(customer.tax_id or ""),
@@ -139,14 +141,14 @@ class CustomerPickerDialog(QDialog):
         customer = self._selected_table_customer()
 
         if customer is None:
-            QMessageBox.information(self, "No customer selected", "Select a customer.")
+            QMessageBox.information(self, t("No customer selected"), t("Select a customer."))
             return
 
         if not customer.is_active:
             QMessageBox.information(
                 self,
-                "Inactive customer",
-                "Select an active customer.",
+                t("Inactive customer"),
+                t("Select an active customer."),
             )
             return
 

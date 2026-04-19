@@ -40,8 +40,10 @@ from app.application.services.orders import (
 )
 from app.domain.enums import DiscountType
 from app.infrastructure.db.session import SessionLocal
+from app.ui.dialog_helpers import translate_button_box
 from app.ui.dialogs.customer_picker_dialog import CustomerPickerDialog
 from app.ui.dialogs.product_variant_picker_dialog import ProductVariantPickerDialog
+from app.ui.localization import t
 
 
 class OrderDialog(QDialog):
@@ -58,13 +60,13 @@ class OrderDialog(QDialog):
         self._selected_line_variant: ProductVariantPickerItem | None = None
         self._line_items: list[_OrderLineItem] = []
 
-        self.setWindowTitle("Edit Order" if self._order_id is not None else "Create Order")
+        self.setWindowTitle(t("Edit Order") if self._order_id is not None else t("Create Order"))
         self.resize(820, 640)
 
         self._customer_display = QLineEdit()
         self._customer_display.setReadOnly(True)
-        self._customer_display.setPlaceholderText("No customer selected")
-        self._select_customer_button = QPushButton("Select Customer")
+        self._customer_display.setPlaceholderText(t("No customer selected"))
+        self._select_customer_button = QPushButton(t("Select Customer"))
         self._select_customer_button.clicked.connect(self._open_customer_picker)
 
         customer_layout = QHBoxLayout()
@@ -76,7 +78,7 @@ class OrderDialog(QDialog):
         self._order_date_input.setDate(QDate.currentDate())
         self._order_date_input.dateChanged.connect(self._sync_deadline_constraints)
 
-        self._has_deadline_checkbox = QCheckBox("Set deadline")
+        self._has_deadline_checkbox = QCheckBox(t("Set deadline"))
         self._has_deadline_checkbox.toggled.connect(self._sync_deadline_constraints)
         self._deadline_input = QDateEdit()
         self._deadline_input.setCalendarPopup(True)
@@ -88,8 +90,8 @@ class OrderDialog(QDialog):
 
         self._variant_display = QLineEdit()
         self._variant_display.setReadOnly(True)
-        self._variant_display.setPlaceholderText("No product variant selected")
-        self._select_variant_button = QPushButton("Select Variant")
+        self._variant_display.setPlaceholderText(t("No product variant selected"))
+        self._select_variant_button = QPushButton(t("Select Variant"))
         self._select_variant_button.clicked.connect(self._open_variant_picker)
 
         variant_layout = QHBoxLayout()
@@ -109,13 +111,13 @@ class OrderDialog(QDialog):
         self._unit_price_input.setSingleStep(0.01)
         self._unit_price_input.valueChanged.connect(self._sync_composer_quantity_limit)
 
-        self._add_line_button = QPushButton("Add Line")
+        self._add_line_button = QPushButton(t("Add Line"))
         self._add_line_button.clicked.connect(self._add_line_from_composer)
 
         composer_fields_layout = QHBoxLayout()
-        composer_fields_layout.addWidget(QLabel("Quantity"))
+        composer_fields_layout.addWidget(QLabel(t("Quantity")))
         composer_fields_layout.addWidget(self._quantity_input)
-        composer_fields_layout.addWidget(QLabel("Unit price"))
+        composer_fields_layout.addWidget(QLabel(t("Unit price")))
         composer_fields_layout.addWidget(self._unit_price_input)
         composer_fields_layout.addStretch()
         composer_fields_layout.addWidget(self._add_line_button)
@@ -130,7 +132,7 @@ class OrderDialog(QDialog):
         self._lines_table = QTableWidget()
         self._lines_table.setColumnCount(6)
         self._lines_table.setHorizontalHeaderLabels(
-            ["Product", "SKU", "Qty", "Unit Price", "Line Total", ""]
+            [t("Product"), "SKU", t("Qty"), t("Unit Price"), t("Line Total"), ""]
         )
         self._lines_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._lines_table.setSelectionMode(QAbstractItemView.NoSelection)
@@ -149,9 +151,9 @@ class OrderDialog(QDialog):
         self._lines_table.setColumnWidth(5, 92)
 
         self._discount_type_input = QComboBox()
-        self._discount_type_input.addItem("None", DiscountType.NONE)
-        self._discount_type_input.addItem("Fixed", DiscountType.FIXED)
-        self._discount_type_input.addItem("Percentage", DiscountType.PERCENTAGE)
+        self._discount_type_input.addItem(t("None"), DiscountType.NONE)
+        self._discount_type_input.addItem(t("Fixed"), DiscountType.FIXED)
+        self._discount_type_input.addItem(t("Percentage"), DiscountType.PERCENTAGE)
         self._discount_type_input.currentIndexChanged.connect(self._sync_discount_input_state)
 
         self._discount_value_input = QDoubleSpinBox()
@@ -165,9 +167,9 @@ class OrderDialog(QDialog):
         self._total_value_label = QLabel("0.00")
 
         summary_layout = QFormLayout()
-        summary_layout.addRow("Subtotal", self._subtotal_value_label)
-        summary_layout.addRow("Discount", self._discount_amount_value_label)
-        summary_layout.addRow("Total", self._total_value_label)
+        summary_layout.addRow(t("Subtotal"), self._subtotal_value_label)
+        summary_layout.addRow(t("Discount"), self._discount_amount_value_label)
+        summary_layout.addRow(t("Total"), self._total_value_label)
 
         self._summary_widget = QWidget()
         self._summary_widget.setLayout(summary_layout)
@@ -176,20 +178,21 @@ class OrderDialog(QDialog):
         self._notes_input.setFixedHeight(90)
 
         form = QFormLayout()
-        form.addRow("Customer", customer_layout)
-        form.addRow("Order date", self._order_date_input)
-        form.addRow("Deadline", deadline_layout)
-        form.addRow(QLabel("<b>Add line</b>"))
-        form.addRow("Product variant", self._line_composer)
-        form.addRow(QLabel("<b>Lines</b>"))
+        form.addRow(t("Customer"), customer_layout)
+        form.addRow(t("Order date"), self._order_date_input)
+        form.addRow(t("Deadline"), deadline_layout)
+        form.addRow(QLabel(f"<b>{t('Add line')}</b>"))
+        form.addRow(t("Product variant"), self._line_composer)
+        form.addRow(QLabel(f"<b>{t('Lines')}</b>"))
         form.addRow(self._lines_table)
-        form.addRow("Discount type", self._discount_type_input)
-        form.addRow("Discount value", self._discount_value_input)
-        form.addRow(QLabel("<b>Total preview</b>"))
+        form.addRow(t("Discount type"), self._discount_type_input)
+        form.addRow(t("Discount value"), self._discount_value_input)
+        form.addRow(QLabel(f"<b>{t('Total preview')}</b>"))
         form.addRow(self._summary_widget)
-        form.addRow("Notes", self._notes_input)
+        form.addRow(t("Notes"), self._notes_input)
 
         self._buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        translate_button_box(self._buttons)
         self._buttons.accepted.connect(self._on_accept)
         self._buttons.rejected.connect(self.reject)
 
@@ -223,7 +226,7 @@ class OrderDialog(QDialog):
         try:
             session = SessionLocal()
         except Exception as exc:
-            QMessageBox.critical(self, "Could not load order", str(exc))
+            QMessageBox.critical(self, t("Could not load order"), str(exc))
             self.reject()
             return
 
@@ -233,7 +236,7 @@ class OrderDialog(QDialog):
                 order.status
             )
             if edit_rejection_message is not None:
-                raise ValueError(edit_rejection_message)
+                raise ValueError(t(edit_rejection_message))
 
             self._set_customer(order.customer_id, order.customer_name)
             self._order_date_input.setDate(
@@ -264,7 +267,7 @@ class OrderDialog(QDialog):
             self._sync_discount_input_state()
             self._sync_total_preview()
         except Exception as exc:
-            QMessageBox.critical(self, "Could not load order", str(exc))
+            QMessageBox.critical(self, t("Could not load order"), str(exc))
             self.reject()
         finally:
             session.close()
@@ -288,14 +291,16 @@ class OrderDialog(QDialog):
                 self._unit_price_input.setValue(float(self._selected_line_variant.price))
             else:
                 self._unit_price_input.setMinimum(self._UNSET_UNIT_PRICE)
-                self._unit_price_input.setSpecialValueText("Enter price")
+                self._unit_price_input.setSpecialValueText(t("Enter price"))
                 self._unit_price_input.setValue(self._UNSET_UNIT_PRICE)
             self._unit_price_input.blockSignals(False)
             self._sync_composer_quantity_limit()
 
     def _add_line_from_composer(self) -> None:
         if self._selected_line_variant is None:
-            QMessageBox.information(self, "Missing product variant", "Select a product variant.")
+            QMessageBox.information(
+                self, t("Missing product variant"), t("Select a product variant.")
+            )
             return
 
         self._line_items.append(
@@ -340,7 +345,7 @@ class OrderDialog(QDialog):
             for column, item in enumerate(items):
                 self._lines_table.setItem(row, column, item)
 
-            remove_button = QPushButton("Remove")
+            remove_button = QPushButton(t("Remove"))
             remove_button.setMinimumWidth(76)
             remove_button.clicked.connect(
                 lambda _checked=False, item=line_item: self._remove_line_item(item)
@@ -399,19 +404,19 @@ class OrderDialog(QDialog):
 
     def _on_accept(self) -> None:
         if self._selected_customer_id is None:
-            QMessageBox.information(self, "Missing customer", "Select a customer.")
+            QMessageBox.information(self, t("Missing customer"), t("Select a customer."))
             return
 
         try:
             data = self._build_input() if self._order_id is None else self._build_update_input()
         except ValueError as exc:
-            QMessageBox.information(self, "Missing order data", str(exc))
+            QMessageBox.information(self, t("Missing order data"), str(exc))
             return
 
         try:
             session = SessionLocal()
         except Exception as exc:
-            QMessageBox.critical(self, "Could not save order", str(exc))
+            QMessageBox.critical(self, t("Could not save order"), str(exc))
             return
 
         try:
@@ -423,13 +428,13 @@ class OrderDialog(QDialog):
             self.accept()
         except Exception as exc:
             session.rollback()
-            QMessageBox.critical(self, "Could not save order", str(exc))
+            QMessageBox.critical(self, t("Could not save order"), str(exc))
         finally:
             session.close()
 
     def _build_input(self) -> CreateOrderInput:
         if self._selected_customer_id is None:
-            raise ValueError("Select a customer.")
+            raise ValueError(t("Select a customer."))
 
         return CreateOrderInput(
             customer_id=self._selected_customer_id,
@@ -443,7 +448,7 @@ class OrderDialog(QDialog):
 
     def _build_update_input(self) -> UpdateOrderInput:
         if self._selected_customer_id is None:
-            raise ValueError("Select a customer.")
+            raise ValueError(t("Select a customer."))
 
         return UpdateOrderInput(
             customer_id=self._selected_customer_id,
@@ -457,13 +462,13 @@ class OrderDialog(QDialog):
 
     def _build_line_inputs(self) -> list[CreateOrderLineInput]:
         if not self._line_items:
-            raise ValueError("Add at least one order line.")
+            raise ValueError(t("Add at least one order line."))
 
         return [line_item.to_input() for line_item in self._line_items]
 
     def _build_update_line_inputs(self) -> list[UpdateOrderLineInput]:
         if not self._line_items:
-            raise ValueError("Add at least one order line.")
+            raise ValueError(t("Add at least one order line."))
 
         return [line_item.to_update_input() for line_item in self._line_items]
 

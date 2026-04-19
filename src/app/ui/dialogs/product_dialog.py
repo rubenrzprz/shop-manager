@@ -27,7 +27,9 @@ from app.application.services.products import (
     UpdateProductService,
 )
 from app.infrastructure.db.session import SessionLocal
+from app.ui.dialog_helpers import translate_button_box
 from app.ui.dialogs.supplier_picker_dialog import SupplierPickerDialog
+from app.ui.localization import t
 
 
 class ProductDialog(QDialog):
@@ -39,16 +41,19 @@ class ProductDialog(QDialog):
         self._selected_supplier_id: int | None = None
         self._selected_supplier_name: str | None = None
 
-        self.setWindowTitle("Edit Product" if self._product_id is not None else "Create Product")
-        self.resize(500, 420)
+        self.setWindowTitle(
+            t("Edit Product") if self._product_id is not None else t("Create Product")
+        )
+        self.resize(640, 420)
 
         self._name_input = QLineEdit()
         self._supplier_display = QLineEdit()
+        self._supplier_display.setMinimumWidth(220)
         self._supplier_display.setReadOnly(True)
-        self._supplier_display.setPlaceholderText("No supplier selected")
-        self._select_supplier_button = QPushButton("Select Supplier")
+        self._supplier_display.setPlaceholderText(t("No supplier selected"))
+        self._select_supplier_button = QPushButton(t("Select"))
         self._select_supplier_button.clicked.connect(self._open_supplier_picker)
-        self._clear_supplier_button = QPushButton("Clear")
+        self._clear_supplier_button = QPushButton(t("Clear"))
         self._clear_supplier_button.clicked.connect(self._clear_supplier)
         self._supplier_widget = self._build_supplier_widget()
 
@@ -56,10 +61,10 @@ class ProductDialog(QDialog):
         self._description_input.setFixedHeight(90)
 
         self._base_price_input = QLineEdit()
-        self._track_stock_checkbox = QCheckBox("Track stock")
+        self._track_stock_checkbox = QCheckBox(t("Track stock"))
 
         self._variant_name_input = QLineEdit()
-        self._variant_name_input.setPlaceholderText("Default")
+        self._variant_name_input.setPlaceholderText(t("Default"))
         self._variant_size_input = QLineEdit()
         self._variant_color_input = QLineEdit()
         self._variant_price_override_input = QLineEdit()
@@ -67,20 +72,19 @@ class ProductDialog(QDialog):
         self._variant_description_input.setFixedHeight(70)
 
         form = QFormLayout()
-        form.addRow("Name", self._name_input)
-        form.addRow("Supplier", self._supplier_widget)
-        form.addRow("Description", self._description_input)
-        form.addRow("Base price", self._base_price_input)
+        form.addRow(t("Name"), self._name_input)
+        form.addRow(t("Supplier"), self._supplier_widget)
+        form.addRow(t("Description"), self._description_input)
+        form.addRow(t("Base price"), self._base_price_input)
         form.addRow("", self._track_stock_checkbox)
-        form.addRow("Default variant name", self._variant_name_input)
-        form.addRow("Default variant size", self._variant_size_input)
-        form.addRow("Default variant color", self._variant_color_input)
-        form.addRow("Default variant price override", self._variant_price_override_input)
-        form.addRow("Default variant description", self._variant_description_input)
+        form.addRow(t("Default variant name"), self._variant_name_input)
+        form.addRow(t("Default variant size"), self._variant_size_input)
+        form.addRow(t("Default variant color"), self._variant_color_input)
+        form.addRow(t("Default variant price override"), self._variant_price_override_input)
+        form.addRow(t("Default variant description"), self._variant_description_input)
 
-        self._buttons = QDialogButtonBox(
-            QDialogButtonBox.Save | QDialogButtonBox.Cancel
-        )
+        self._buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        translate_button_box(self._buttons)
         self._buttons.accepted.connect(self._on_accept)
         self._buttons.rejected.connect(self.reject)
 
@@ -96,7 +100,7 @@ class ProductDialog(QDialog):
         widget = QWidget()
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self._supplier_display)
+        layout.addWidget(self._supplier_display, 1)
         layout.addWidget(self._select_supplier_button)
         layout.addWidget(self._clear_supplier_button)
         widget.setLayout(layout)
@@ -109,7 +113,7 @@ class ProductDialog(QDialog):
         try:
             session = SessionLocal()
         except Exception as exc:
-            QMessageBox.critical(self, "Could not load product", str(exc))
+            QMessageBox.critical(self, t("Could not load product"), str(exc))
             self.reject()
             return
 
@@ -117,7 +121,7 @@ class ProductDialog(QDialog):
             self._product = GetProductForEditService(session).execute(self._product_id)
             self._populate_product_form(self._product)
         except Exception as exc:
-            QMessageBox.critical(self, "Could not load product", str(exc))
+            QMessageBox.critical(self, t("Could not load product"), str(exc))
             self.reject()
         finally:
             session.close()
@@ -126,7 +130,9 @@ class ProductDialog(QDialog):
         self._name_input.setText(product.name)
         self._set_supplier(product.supplier_id, product.supplier_name)
         self._description_input.setPlainText(product.description or "")
-        self._base_price_input.setText("" if product.base_price is None else str(product.base_price))
+        self._base_price_input.setText(
+            "" if product.base_price is None else str(product.base_price)
+        )
         self._track_stock_checkbox.setChecked(product.track_stock)
 
         variant = product.default_variant
@@ -164,19 +170,19 @@ class ProductDialog(QDialog):
         variant_description = self._variant_description_input.toPlainText().strip() or None
 
         try:
-            base_price = self._parse_decimal(self._base_price_input.text())
+            base_price = self._parse_decimal(self._base_price_input.text(), t("Base price"))
             variant_price_override = self._parse_decimal(
                 self._variant_price_override_input.text(),
-                "Default variant price override",
+                t("Default variant price override"),
             )
         except ValueError as exc:
-            QMessageBox.critical(self, "Invalid data", str(exc))
+            QMessageBox.critical(self, t("Invalid data"), str(exc))
             return
 
         try:
             session = SessionLocal()
         except Exception as exc:
-            QMessageBox.critical(self, "Could not create product", str(exc))
+            QMessageBox.critical(self, t("Could not create product"), str(exc))
             return
 
         try:
@@ -200,7 +206,7 @@ class ProductDialog(QDialog):
                 CreateProductService(session).execute(data)
             else:
                 if self._product is None:
-                    raise ValueError("Product was not loaded.")
+                    raise ValueError(t("Product was not loaded."))
 
                 data = UpdateProductInput(
                     name=name,
@@ -225,7 +231,7 @@ class ProductDialog(QDialog):
         except Exception as exc:
             session.rollback()
             action = "update" if self._product_id is not None else "create"
-            QMessageBox.critical(self, f"Could not {action} product", str(exc))
+            QMessageBox.critical(self, t(f"Could not {action} product"), str(exc))
         finally:
             session.close()
 
@@ -239,10 +245,14 @@ class ProductDialog(QDialog):
         try:
             parsed = Decimal(normalized)
         except InvalidOperation as exc:
-            raise ValueError(f"{field_label} must be a valid number.") from exc
+            raise ValueError(
+                t("{field_label} must be a valid number.").format(field_label=field_label)
+            ) from exc
 
         if not parsed.is_finite():
-            raise ValueError(f"{field_label} must be a finite number.")
+            raise ValueError(
+                t("{field_label} must be a finite number.").format(field_label=field_label)
+            )
 
         return parsed
 

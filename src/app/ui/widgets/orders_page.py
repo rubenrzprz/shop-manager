@@ -20,7 +20,9 @@ from app.application.services.orders import (
 )
 from app.domain.enums import OrderStatus
 from app.infrastructure.db.session import SessionLocal
+from app.ui.dialog_helpers import question
 from app.ui.dialogs.order_dialog import OrderDialog
+from app.ui.localization import order_status_label, t
 
 
 class OrdersPage(QWidget):
@@ -29,32 +31,29 @@ class OrdersPage(QWidget):
 
         self._orders_by_id: dict[int, OrderListItem] = {}
 
-        self._title_label = QLabel("Orders")
+        self._title_label = QLabel()
         self._title_label.setObjectName("pageTitle")
 
-        self._create_button = QPushButton("New Order")
+        self._create_button = QPushButton()
         self._create_button.clicked.connect(self.open_create_dialog)
 
-        self._edit_button = QPushButton("Edit Order")
+        self._edit_button = QPushButton()
         self._edit_button.clicked.connect(self.open_edit_dialog)
 
-        self._advance_status_button = QPushButton("Advance Status")
+        self._advance_status_button = QPushButton()
         self._advance_status_button.clicked.connect(self.advance_selected_order_status)
 
-        self._revert_status_button = QPushButton("Revert Status")
+        self._revert_status_button = QPushButton()
         self._revert_status_button.clicked.connect(self.revert_selected_order_status)
 
-        self._cancel_order_button = QPushButton("Cancel Order")
+        self._cancel_order_button = QPushButton()
         self._cancel_order_button.clicked.connect(self.cancel_selected_order)
 
-        self._refresh_button = QPushButton("Refresh")
+        self._refresh_button = QPushButton()
         self._refresh_button.clicked.connect(self.load_orders)
 
         self._table = QTableWidget()
         self._table.setColumnCount(8)
-        self._table.setHorizontalHeaderLabels(
-            ["ID", "Order #", "Customer", "Status", "Order Date", "Deadline", "Lines", "Total"]
-        )
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -89,6 +88,29 @@ class OrdersPage(QWidget):
 
         self.load_orders()
 
+    def retranslate_ui(self) -> None:
+        self._title_label.setText(t("Orders"))
+        self._create_button.setText(t("New Order"))
+        self._edit_button.setText(t("Edit Order"))
+        self._advance_status_button.setText(t("Advance Status"))
+        self._revert_status_button.setText(t("Revert Status"))
+        self._cancel_order_button.setText(t("Cancel Order"))
+        self._refresh_button.setText(t("Refresh"))
+        self._table.setHorizontalHeaderLabels(
+            [
+                t("ID"),
+                t("Order #"),
+                t("Customer"),
+                t("Status"),
+                t("Order Date"),
+                t("Deadline"),
+                t("Lines"),
+                t("Total"),
+            ]
+        )
+        if self._table.rowCount() > 0:
+            self.load_orders()
+
     def open_create_dialog(self) -> None:
         dialog = OrderDialog(self)
         if dialog.exec():
@@ -97,13 +119,15 @@ class OrdersPage(QWidget):
     def open_edit_dialog(self) -> None:
         order = self._selected_order()
         if order is None:
-            QMessageBox.information(self, "No order selected", "Select an active order to edit.")
+            QMessageBox.information(
+                self, t("No order selected"), t("Select an active order to edit.")
+            )
             return
 
         try:
             session = SessionLocal()
         except Exception as exc:
-            QMessageBox.critical(self, "Could not check order edit policy", str(exc))
+            QMessageBox.critical(self, t("Could not check order edit policy"), str(exc))
             return
 
         try:
@@ -111,13 +135,13 @@ class OrdersPage(QWidget):
                 order.status
             )
         except Exception as exc:
-            QMessageBox.critical(self, "Could not check order edit policy", str(exc))
+            QMessageBox.critical(self, t("Could not check order edit policy"), str(exc))
             return
         finally:
             session.close()
 
         if edit_rejection_message is not None:
-            QMessageBox.information(self, "Order cannot be edited", edit_rejection_message)
+            QMessageBox.information(self, t("Order cannot be edited"), t(edit_rejection_message))
             return
 
         dialog = OrderDialog(self, order_id=order.id)
@@ -127,15 +151,15 @@ class OrdersPage(QWidget):
     def advance_selected_order_status(self) -> None:
         order = self._selected_order()
         if order is None:
-            QMessageBox.information(self, "No order selected", "Select an order to advance.")
+            QMessageBox.information(self, t("No order selected"), t("Select an order to advance."))
             return
 
         next_status = UpdateOrderStatusService.next_forward_status(order.status)
         if next_status is None:
             QMessageBox.information(
                 self,
-                "Order cannot advance",
-                "Completed and cancelled orders cannot be advanced.",
+                t("Order cannot advance"),
+                t("Completed and cancelled orders cannot be advanced."),
             )
             return
 
@@ -144,15 +168,15 @@ class OrdersPage(QWidget):
     def revert_selected_order_status(self) -> None:
         order = self._selected_order()
         if order is None:
-            QMessageBox.information(self, "No order selected", "Select an order to revert.")
+            QMessageBox.information(self, t("No order selected"), t("Select an order to revert."))
             return
 
         previous_status = UpdateOrderStatusService.previous_status(order.status)
         if previous_status is None:
             QMessageBox.information(
                 self,
-                "Order cannot revert",
-                "Draft and cancelled orders cannot be reverted.",
+                t("Order cannot revert"),
+                t("Draft and cancelled orders cannot be reverted."),
             )
             return
 
@@ -161,23 +185,21 @@ class OrdersPage(QWidget):
     def cancel_selected_order(self) -> None:
         order = self._selected_order()
         if order is None:
-            QMessageBox.information(self, "No order selected", "Select an order to cancel.")
+            QMessageBox.information(self, t("No order selected"), t("Select an order to cancel."))
             return
 
         if not UpdateOrderStatusService.can_transition(order.status, OrderStatus.CANCELLED):
             QMessageBox.information(
                 self,
-                "Order cannot be cancelled",
-                "Completed and cancelled orders cannot be cancelled.",
+                t("Order cannot be cancelled"),
+                t("Completed and cancelled orders cannot be cancelled."),
             )
             return
 
-        response = QMessageBox.question(
+        response = question(
             self,
-            "Cancel order",
-            "Cancel this order? This cannot be undone from the current workflow.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            t("Cancel order"),
+            t("Cancel this order? This cannot be undone from the current workflow."),
         )
         if response != QMessageBox.Yes:
             return
@@ -192,7 +214,7 @@ class OrdersPage(QWidget):
         try:
             session = SessionLocal()
         except Exception as exc:
-            QMessageBox.critical(self, "Could not update order status", str(exc))
+            QMessageBox.critical(self, t("Could not update order status"), str(exc))
             return
 
         try:
@@ -201,7 +223,7 @@ class OrdersPage(QWidget):
             self.load_orders()
         except Exception as exc:
             session.rollback()
-            QMessageBox.critical(self, "Could not update order status", str(exc))
+            QMessageBox.critical(self, t("Could not update order status"), str(exc))
         finally:
             session.close()
 
@@ -224,7 +246,7 @@ class OrdersPage(QWidget):
         self._table.setRowCount(0)
         QMessageBox.critical(
             self,
-            "Could not load orders",
+            t("Could not load orders"),
             str(exc),
         )
 
@@ -237,7 +259,7 @@ class OrdersPage(QWidget):
                 QTableWidgetItem(str(order.id)),
                 QTableWidgetItem(order.order_number),
                 QTableWidgetItem(order.customer_name),
-                QTableWidgetItem(order.status.value.title().replace("_", " ")),
+                QTableWidgetItem(order_status_label(order.status)),
                 QTableWidgetItem(order.order_date.isoformat()),
                 QTableWidgetItem(order.deadline.isoformat() if order.deadline else ""),
                 QTableWidgetItem(str(len(order.lines))),
