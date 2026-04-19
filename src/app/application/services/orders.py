@@ -352,8 +352,9 @@ class UpdateOrderService:
         if order is None:
             raise ValueError("Order not found.")
 
-        if not self.can_edit_full_order(order.status):
-            raise ValueError("Only active orders can be edited.")
+        edit_rejection_message = self.full_order_edit_rejection_message(order.status)
+        if edit_rejection_message is not None:
+            raise ValueError(edit_rejection_message)
 
         customer = self._session.get(Customer, data.customer_id)
         if customer is None:
@@ -423,12 +424,22 @@ class UpdateOrderService:
         return status in SIMPLE_EDITABLE_ORDER_STATUSES
 
     def can_edit_full_order(self, status: OrderStatus) -> bool:
-        return self._can_edit_full_order(
+        return self.full_order_edit_rejection_message(status) is None
+
+    def full_order_edit_rejection_message(self, status: OrderStatus) -> str | None:
+        strict_order_workflow_enabled = ApplicationSettingsService(
+            self._session
+        ).strict_order_workflow_enabled()
+        if self._can_edit_full_order(
             status,
-            strict_order_workflow_enabled=ApplicationSettingsService(
-                self._session
-            ).strict_order_workflow_enabled(),
-        )
+            strict_order_workflow_enabled=strict_order_workflow_enabled,
+        ):
+            return None
+
+        if strict_order_workflow_enabled:
+            return "Strict order workflow is enabled. Only draft orders can be fully edited."
+
+        return "Only active orders can be edited."
 
     def _prepare_order_lines(
         self,

@@ -103,7 +103,10 @@ def test_order_edit_policy_uses_strict_order_workflow_setting(db_session):
     ApplicationSettingsService(db_session).set_strict_order_workflow_enabled(True)
     db_session.commit()
 
-    with pytest.raises(ValueError, match="Only active orders can be edited."):
+    with pytest.raises(
+        ValueError,
+        match="Strict order workflow is enabled. Only draft orders can be fully edited.",
+    ):
         UpdateOrderService(db_session).execute(
             order.id,
             UpdateOrderInput(
