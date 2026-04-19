@@ -443,8 +443,12 @@ def test_update_order_status_service_allows_reverting_forward_transitions(db_ses
     service.execute(order.id, OrderStatus.IN_PROGRESS)
     service.execute(order.id, OrderStatus.READY)
     service.execute(order.id, OrderStatus.COMPLETED)
+    assert order.completed_at is not None
 
-    assert service.execute(order.id, OrderStatus.READY).status == OrderStatus.READY
+    reverted_order = service.execute(order.id, OrderStatus.READY)
+
+    assert reverted_order.status == OrderStatus.READY
+    assert reverted_order.completed_at is None
     assert service.execute(order.id, OrderStatus.IN_PROGRESS).status == OrderStatus.IN_PROGRESS
     assert service.execute(order.id, OrderStatus.CONFIRMED).status == OrderStatus.CONFIRMED
     assert service.execute(order.id, OrderStatus.DRAFT).status == OrderStatus.DRAFT

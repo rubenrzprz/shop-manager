@@ -510,6 +510,8 @@ class UpdateOrderStatusService:
         order.status = target_status
         if target_status == OrderStatus.COMPLETED:
             order.completed_at = datetime.now(UTC)
+        else:
+            order.completed_at = None
 
         self._session.flush()
 
