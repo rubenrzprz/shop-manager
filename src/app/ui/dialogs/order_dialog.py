@@ -229,7 +229,7 @@ class OrderDialog(QDialog):
 
         try:
             order = GetOrderForEditService(session).execute(self._order_id)
-            if not UpdateOrderService._can_edit_full_order(order.status):
+            if not UpdateOrderService(session).can_edit_full_order(order.status):
                 raise ValueError("Only active orders can be edited.")
 
             self._set_customer(order.customer_id, order.customer_name)
