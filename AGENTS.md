@@ -168,6 +168,7 @@ The project currently has these completed vertical slices:
   - create draft orders
   - list orders
   - edit active orders
+  - order status transitions
   - customer picker
   - product variant picker
   - multi-line order creation UI
@@ -194,6 +195,12 @@ The project currently has these completed vertical slices:
   status-specific editing rules instead of draft-like behavior.
 - A future settings slice should expose `strict_order_workflow_enabled` as a user-configurable
   option instead of a code constant.
+- Order status transitions follow `DRAFT -> CONFIRMED -> IN_PROGRESS -> READY -> COMPLETED`.
+- Forward-path statuses can be reverted one step for accidental advances, including
+  `COMPLETED -> READY`.
+- Active non-completed statuses can transition to `CANCELLED`.
+- `CANCELLED` is terminal for now.
+- Reopening cancelled orders is deferred as an explicit future workflow, likely `CANCELLED -> DRAFT`.
 - A fuller order workspace redesign is a future UI step: group customer/date fields, line table,
   line composer, totals/discount summary, and notes around order review/editing workflows.
 - Stock movements from orders are deferred.
@@ -203,18 +210,17 @@ The project currently has these completed vertical slices:
 
 When asked to propose the next logical step, consider this order:
 
-1. Order status transitions
-   - draft to confirmed
-   - confirmed to in-progress/ready/completed/cancelled
-   - enforce valid transitions in application layer
-2. Settings for strict order workflow
+1. Settings for strict order workflow
    - add a settings area for application behavior toggles
    - expose `strict_order_workflow_enabled`
    - keep current default simple workflow behavior unless changed
-3. Status-aware order editing rules
+2. Status-aware order editing rules
    - decide which fields can change for confirmed/in-progress/ready orders when strict workflow is on
    - preserve service-calculated totals and validation
    - consider audit/history needs before stock workflows
+3. Reopen cancelled orders
+   - add explicit `CANCELLED -> DRAFT` workflow if the client needs reconfirmation
+   - do not make cancelled orders generally editable/transitionable without this workflow
 4. Stock movements
    - reduce stock when an order reaches the appropriate status
    - do not mix stock behavior into basic order create/list
