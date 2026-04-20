@@ -47,6 +47,7 @@ _TRANSLATIONS = {
         "Advance Status": "Avanzar estado",
         "Revert Status": "Revertir estado",
         "Cancel Order": "Cancelar pedido",
+        "Recover Order": "Recuperar pedido",
         "Refresh": "Actualizar",
         "ID": "ID",
         "Name": "Nombre",
@@ -203,6 +204,15 @@ _TRANSLATIONS = {
         "Cancel this order? This cannot be undone from the current workflow.": (
             "¿Cancelar este pedido? Esto no se puede deshacer con el flujo actual."
         ),
+        "Select an order to recover.": "Selecciona un pedido para recuperar.",
+        "Order cannot be recovered": "El pedido no se puede recuperar",
+        "Only cancelled orders can be recovered to draft.": (
+            "Solo los pedidos cancelados se pueden recuperar como borrador."
+        ),
+        "Recover order": "Recuperar pedido",
+        "Recover this cancelled order to draft?": (
+            "¿Recuperar este pedido cancelado como borrador?"
+        ),
         "Could not update order status": "No se pudo actualizar el estado del pedido",
         "Could not load orders": "No se pudieron cargar los pedidos",
         "Set deadline": "Definir fecha límite",
@@ -218,6 +228,13 @@ _TRANSLATIONS = {
             "se pueden editar por completo."
         ),
         "Only active orders can be edited.": "Solo se pueden editar pedidos activos.",
+        "This order status cannot be edited.": "Este estado del pedido no se puede editar.",
+        "Ready orders only allow deadline, discount, and notes changes.": (
+            "Los pedidos listos solo permiten cambiar la fecha límite, el descuento y las notas."
+        ),
+        "Completed and cancelled orders only allow notes changes.": (
+            "Los pedidos completados y cancelados solo permiten cambiar las notas."
+        ),
         "Language": "Idioma",
         "English": "Inglés",
         "Spanish": "Español",

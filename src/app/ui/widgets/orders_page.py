@@ -49,6 +49,9 @@ class OrdersPage(QWidget):
         self._cancel_order_button = QPushButton()
         self._cancel_order_button.clicked.connect(self.cancel_selected_order)
 
+        self._recover_order_button = QPushButton()
+        self._recover_order_button.clicked.connect(self.recover_selected_order)
+
         self._refresh_button = QPushButton()
         self._refresh_button.clicked.connect(self.load_orders)
 
@@ -79,6 +82,7 @@ class OrdersPage(QWidget):
         actions_layout.addWidget(self._advance_status_button)
         actions_layout.addWidget(self._revert_status_button)
         actions_layout.addWidget(self._cancel_order_button)
+        actions_layout.addWidget(self._recover_order_button)
         actions_layout.addWidget(self._refresh_button)
         actions_layout.addStretch()
 
@@ -95,6 +99,7 @@ class OrdersPage(QWidget):
         self._advance_status_button.setText(t("Advance Status"))
         self._revert_status_button.setText(t("Revert Status"))
         self._cancel_order_button.setText(t("Cancel Order"))
+        self._recover_order_button.setText(t("Recover Order"))
         self._refresh_button.setText(t("Refresh"))
         self._table.setHorizontalHeaderLabels(
             [
@@ -131,7 +136,7 @@ class OrdersPage(QWidget):
             return
 
         try:
-            edit_rejection_message = UpdateOrderService(session).full_order_edit_rejection_message(
+            edit_rejection_message = UpdateOrderService(session).order_edit_rejection_message(
                 order.status
             )
         except Exception as exc:
@@ -205,6 +210,30 @@ class OrdersPage(QWidget):
             return
 
         self._transition_selected_order(order, OrderStatus.CANCELLED)
+
+    def recover_selected_order(self) -> None:
+        order = self._selected_order()
+        if order is None:
+            QMessageBox.information(self, t("No order selected"), t("Select an order to recover."))
+            return
+
+        if not UpdateOrderStatusService.can_transition(order.status, OrderStatus.DRAFT):
+            QMessageBox.information(
+                self,
+                t("Order cannot be recovered"),
+                t("Only cancelled orders can be recovered to draft."),
+            )
+            return
+
+        response = question(
+            self,
+            t("Recover order"),
+            t("Recover this cancelled order to draft?"),
+        )
+        if response != QMessageBox.Yes:
+            return
+
+        self._transition_selected_order(order, OrderStatus.DRAFT)
 
     def _transition_selected_order(
         self,

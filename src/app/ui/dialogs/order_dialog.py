@@ -36,6 +36,7 @@ from app.application.dto.products import ProductVariantPickerItem
 from app.application.services.orders import (
     CreateOrderService,
     GetOrderForEditService,
+    OrderEditCapability,
     UpdateOrderService,
 )
 from app.domain.enums import DiscountType
@@ -59,6 +60,7 @@ class OrderDialog(QDialog):
         self._selected_customer_name: str | None = None
         self._selected_line_variant: ProductVariantPickerItem | None = None
         self._line_items: list[_OrderLineItem] = []
+        self._edit_capability = OrderEditCapability.FULL
 
         self.setWindowTitle(t("Edit Order") if self._order_id is not None else t("Create Order"))
         self.resize(820, 640)
@@ -209,6 +211,9 @@ class OrderDialog(QDialog):
             self._load_order()
 
     def _open_customer_picker(self) -> None:
+        if self._edit_capability != OrderEditCapability.FULL:
+            return
+
         dialog = CustomerPickerDialog(self)
         if dialog.exec() and dialog.selected_customer is not None:
             customer = dialog.selected_customer
@@ -232,11 +237,11 @@ class OrderDialog(QDialog):
 
         try:
             order = GetOrderForEditService(session).execute(self._order_id)
-            edit_rejection_message = UpdateOrderService(session).full_order_edit_rejection_message(
-                order.status
-            )
+            update_service = UpdateOrderService(session)
+            edit_rejection_message = update_service.order_edit_rejection_message(order.status)
             if edit_rejection_message is not None:
                 raise ValueError(t(edit_rejection_message))
+            self._edit_capability = update_service.order_edit_capability(order.status)
 
             self._set_customer(order.customer_id, order.customer_name)
             self._order_date_input.setDate(
@@ -266,6 +271,7 @@ class OrderDialog(QDialog):
             self._sync_deadline_constraints()
             self._sync_discount_input_state()
             self._sync_total_preview()
+            self._apply_edit_capability()
         except Exception as exc:
             QMessageBox.critical(self, t("Could not load order"), str(exc))
             self.reject()
@@ -278,6 +284,9 @@ class OrderDialog(QDialog):
             self._discount_type_input.setCurrentIndex(index)
 
     def _open_variant_picker(self) -> None:
+        if self._edit_capability != OrderEditCapability.FULL:
+            return
+
         dialog = ProductVariantPickerDialog(self)
         if dialog.exec() and dialog.selected_variant is not None:
             self._selected_line_variant = dialog.selected_variant
@@ -297,6 +306,9 @@ class OrderDialog(QDialog):
             self._sync_composer_quantity_limit()
 
     def _add_line_from_composer(self) -> None:
+        if self._edit_capability != OrderEditCapability.FULL:
+            return
+
         if self._selected_line_variant is None:
             QMessageBox.information(
                 self, t("Missing product variant"), t("Select a product variant.")
@@ -320,12 +332,18 @@ class OrderDialog(QDialog):
         self._sync_total_preview()
 
     def _remove_line_item(self, line_item: "_OrderLineItem") -> None:
+        if self._edit_capability != OrderEditCapability.FULL:
+            return
+
         self._line_items = [item for item in self._line_items if item is not line_item]
         self._refresh_lines_table()
         self._sync_discount_input_state()
         self._sync_total_preview()
 
     def _refresh_lines_table(self) -> None:
+        can_edit_full_order = self._edit_capability == OrderEditCapability.FULL
+        self._lines_table.clearContents()
+        self._lines_table.setColumnHidden(5, not can_edit_full_order)
         self._lines_table.setRowCount(len(self._line_items))
 
         for row, line_item in enumerate(self._line_items):
@@ -345,12 +363,15 @@ class OrderDialog(QDialog):
             for column, item in enumerate(items):
                 self._lines_table.setItem(row, column, item)
 
-            remove_button = QPushButton(t("Remove"))
-            remove_button.setMinimumWidth(76)
-            remove_button.clicked.connect(
-                lambda _checked=False, item=line_item: self._remove_line_item(item)
-            )
-            self._lines_table.setCellWidget(row, 5, remove_button)
+            if can_edit_full_order:
+                remove_button = QPushButton(t("Remove"))
+                remove_button.setMinimumWidth(76)
+                remove_button.clicked.connect(
+                    lambda _checked=False, item=line_item: self._remove_line_item(item)
+                )
+                self._lines_table.setCellWidget(row, 5, remove_button)
+            else:
+                self._lines_table.setItem(row, 5, QTableWidgetItem(""))
 
         self._lines_table.resizeRowsToContents()
 
@@ -368,7 +389,11 @@ class OrderDialog(QDialog):
     def _sync_discount_input_state(self, *_args) -> None:
         discount_type = self._discount_type_input.currentData()
         is_discounted = discount_type != DiscountType.NONE
-        self._discount_value_input.setEnabled(is_discounted)
+        edit_capability = getattr(self, "_edit_capability", OrderEditCapability.FULL)
+        discount_editable = edit_capability != OrderEditCapability.NOTES_ONLY
+        if hasattr(self._discount_type_input, "setEnabled"):
+            self._discount_type_input.setEnabled(discount_editable)
+        self._discount_value_input.setEnabled(is_discounted and discount_editable)
 
         if not is_discounted:
             self._discount_value_input.setValue(0)
@@ -397,7 +422,12 @@ class OrderDialog(QDialog):
     def _sync_deadline_constraints(self, *_args) -> None:
         order_date = self._order_date_input.date()
         self._deadline_input.setMinimumDate(order_date)
-        self._deadline_input.setEnabled(self._has_deadline_checkbox.isChecked())
+        edit_capability = getattr(self, "_edit_capability", OrderEditCapability.FULL)
+        deadline_editable = edit_capability != OrderEditCapability.NOTES_ONLY
+        self._has_deadline_checkbox.setEnabled(deadline_editable)
+        self._deadline_input.setEnabled(
+            self._has_deadline_checkbox.isChecked() and deadline_editable
+        )
 
         if self._has_deadline_checkbox.isChecked() and self._deadline_input.date() < order_date:
             self._deadline_input.setDate(order_date)
@@ -431,6 +461,25 @@ class OrderDialog(QDialog):
             QMessageBox.critical(self, t("Could not save order"), str(exc))
         finally:
             session.close()
+
+    def _apply_edit_capability(self) -> None:
+        can_edit_full_order = self._edit_capability == OrderEditCapability.FULL
+        can_edit_ready_fields = self._edit_capability in {
+            OrderEditCapability.FULL,
+            OrderEditCapability.READY_LIMITED,
+        }
+
+        self._select_customer_button.setEnabled(can_edit_full_order)
+        self._order_date_input.setEnabled(can_edit_full_order)
+        self._line_composer.setEnabled(can_edit_full_order)
+        self._lines_table.setEnabled(True)
+        self._has_deadline_checkbox.setEnabled(can_edit_ready_fields)
+        self._discount_type_input.setEnabled(can_edit_ready_fields)
+        self._discount_value_input.setEnabled(can_edit_ready_fields)
+        self._notes_input.setEnabled(True)
+        self._refresh_lines_table()
+        self._sync_deadline_constraints()
+        self._sync_discount_input_state()
 
     def _build_input(self) -> CreateOrderInput:
         if self._selected_customer_id is None:
