@@ -217,7 +217,7 @@ class OrdersPage(QWidget):
             QMessageBox.information(self, t("No order selected"), t("Select an order to recover."))
             return
 
-        if not UpdateOrderStatusService.can_transition(order.status, OrderStatus.DRAFT):
+        if order.status != OrderStatus.CANCELLED:
             QMessageBox.information(
                 self,
                 t("Order cannot be recovered"),
