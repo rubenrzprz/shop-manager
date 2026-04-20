@@ -17,29 +17,27 @@ from app.application.dto.suppliers import SupplierListItem
 from app.application.services.suppliers import ListSuppliersService
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialogs.supplier_dialog import SupplierDialog
+from app.ui.localization import t
 
 
 class SuppliersPage(QWidget):
     def __init__(self) -> None:
         super().__init__()
 
-        self._title_label = QLabel("Suppliers")
+        self._title_label = QLabel()
         self._title_label.setObjectName("pageTitle")
 
-        self._create_button = QPushButton("New Supplier")
+        self._create_button = QPushButton()
         self._create_button.clicked.connect(self.open_create_dialog)
 
-        self._edit_button = QPushButton("Edit Supplier")
+        self._edit_button = QPushButton()
         self._edit_button.clicked.connect(self.open_edit_dialog)
 
-        self._refresh_button = QPushButton("Refresh")
+        self._refresh_button = QPushButton()
         self._refresh_button.clicked.connect(self.load_suppliers)
 
         self._table = QTableWidget()
         self._table.setColumnCount(8)
-        self._table.setHorizontalHeaderLabels(
-            ["ID", "Name", "Tax ID", "Phone", "Email", "City", "Country", "Status"]
-        )
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -70,7 +68,28 @@ class SuppliersPage(QWidget):
 
         self.setLayout(layout)
 
+        self.retranslate_ui()
         self.load_suppliers()
+
+    def retranslate_ui(self) -> None:
+        self._title_label.setText(t("Suppliers"))
+        self._create_button.setText(t("New Supplier"))
+        self._edit_button.setText(t("Edit Supplier"))
+        self._refresh_button.setText(t("Refresh"))
+        self._table.setHorizontalHeaderLabels(
+            [
+                t("ID"),
+                t("Name"),
+                t("Tax ID"),
+                t("Phone"),
+                t("Email"),
+                t("City"),
+                t("Country"),
+                t("Status"),
+            ]
+        )
+        if self._table.rowCount() > 0:
+            self.load_suppliers()
 
     def open_create_dialog(self) -> None:
         dialog = SupplierDialog(self)
@@ -83,8 +102,8 @@ class SuppliersPage(QWidget):
         if supplier_id is None:
             QMessageBox.information(
                 self,
-                "No supplier selected",
-                "Select a supplier to edit.",
+                t("No supplier selected"),
+                t("Select a supplier to edit."),
             )
             return
 
@@ -111,7 +130,7 @@ class SuppliersPage(QWidget):
         self._table.setRowCount(0)
         QMessageBox.critical(
             self,
-            "Could not load suppliers",
+            t("Could not load suppliers"),
             str(exc),
         )
 
@@ -119,7 +138,7 @@ class SuppliersPage(QWidget):
         self._table.setRowCount(len(suppliers))
 
         for row, supplier in enumerate(suppliers):
-            status_text = "Active" if supplier.is_active else "Inactive"
+            status_text = t("Active") if supplier.is_active else t("Inactive")
             items = [
                 QTableWidgetItem(str(supplier.id)),
                 QTableWidgetItem(supplier.name),

@@ -17,29 +17,27 @@ from app.application.dto.customers import CustomerListItem
 from app.application.services.customers import ListCustomersService
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialogs.customer_dialog import CustomerDialog
+from app.ui.localization import t
 
 
 class CustomersPage(QWidget):
     def __init__(self) -> None:
         super().__init__()
 
-        self._title_label = QLabel("Customers")
+        self._title_label = QLabel()
         self._title_label.setObjectName("pageTitle")
 
-        self._create_button = QPushButton("New Customer")
+        self._create_button = QPushButton()
         self._create_button.clicked.connect(self.open_create_dialog)
 
-        self._edit_button = QPushButton("Edit Customer")
+        self._edit_button = QPushButton()
         self._edit_button.clicked.connect(self.open_edit_dialog)
 
-        self._refresh_button = QPushButton("Refresh")
+        self._refresh_button = QPushButton()
         self._refresh_button.clicked.connect(self.load_customers)
 
         self._table = QTableWidget()
         self._table.setColumnCount(9)
-        self._table.setHorizontalHeaderLabels(
-            ["ID", "Type", "Name", "Company", "Tax ID", "Phone", "Email", "City", "Status"]
-        )
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -71,7 +69,29 @@ class CustomersPage(QWidget):
 
         self.setLayout(layout)
 
+        self.retranslate_ui()
         self.load_customers()
+
+    def retranslate_ui(self) -> None:
+        self._title_label.setText(t("Customers"))
+        self._create_button.setText(t("New Customer"))
+        self._edit_button.setText(t("Edit Customer"))
+        self._refresh_button.setText(t("Refresh"))
+        self._table.setHorizontalHeaderLabels(
+            [
+                t("ID"),
+                t("Type"),
+                t("Name"),
+                t("Company"),
+                t("Tax ID"),
+                t("Phone"),
+                t("Email"),
+                t("City"),
+                t("Status"),
+            ]
+        )
+        if self._table.rowCount() > 0:
+            self.load_customers()
 
     def open_create_dialog(self) -> None:
         dialog = CustomerDialog(self)
@@ -84,8 +104,8 @@ class CustomersPage(QWidget):
         if customer_id is None:
             QMessageBox.information(
                 self,
-                "No customer selected",
-                "Select a customer to edit.",
+                t("No customer selected"),
+                t("Select a customer to edit."),
             )
             return
 
@@ -112,7 +132,7 @@ class CustomersPage(QWidget):
         self._table.setRowCount(0)
         QMessageBox.critical(
             self,
-            "Could not load customers",
+            t("Could not load customers"),
             str(exc),
         )
 
@@ -120,10 +140,11 @@ class CustomersPage(QWidget):
         self._table.setRowCount(len(customers))
 
         for row, customer in enumerate(customers):
-            status_text = "Active" if customer.is_active else "Inactive"
+            status_text = t("Active") if customer.is_active else t("Inactive")
+            customer_type_text = t(customer.customer_type.value.title())
             items = [
                 QTableWidgetItem(str(customer.id)),
-                QTableWidgetItem(customer.customer_type.value.title()),
+                QTableWidgetItem(customer_type_text),
                 QTableWidgetItem(customer.name),
                 QTableWidgetItem(customer.company_name or ""),
                 QTableWidgetItem(customer.tax_id or ""),

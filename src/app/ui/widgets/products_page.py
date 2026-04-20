@@ -19,36 +19,35 @@ from app.application.services.products import (
     ProductStatusService,
 )
 from app.infrastructure.db.session import SessionLocal
+from app.ui.dialog_helpers import question
 from app.ui.dialogs.product_dialog import ProductDialog
+from app.ui.localization import t
 
 
 class ProductsPage(QWidget):
     def __init__(self) -> None:
         super().__init__()
 
-        self._title_label = QLabel("Products")
+        self._title_label = QLabel()
         self._title_label.setObjectName("pageTitle")
 
-        self._create_button = QPushButton("New Product")
+        self._create_button = QPushButton()
         self._create_button.clicked.connect(self.open_create_dialog)
 
-        self._edit_button = QPushButton("Edit Product")
+        self._edit_button = QPushButton()
         self._edit_button.clicked.connect(self.open_edit_dialog)
 
-        self._activate_button = QPushButton("Activate Product")
+        self._activate_button = QPushButton()
         self._activate_button.clicked.connect(self.activate_selected_product)
 
-        self._deactivate_button = QPushButton("Deactivate Product")
+        self._deactivate_button = QPushButton()
         self._deactivate_button.clicked.connect(self.deactivate_selected_product)
 
-        self._refresh_button = QPushButton("Refresh")
+        self._refresh_button = QPushButton()
         self._refresh_button.clicked.connect(self.load_products)
 
         self._table = QTableWidget()
         self._table.setColumnCount(7)
-        self._table.setHorizontalHeaderLabels(
-            ["ID", "Name", "Supplier", "Base Price", "Track Stock", "Status", "Variant Summary"]
-        )
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -80,7 +79,28 @@ class ProductsPage(QWidget):
 
         self.setLayout(layout)
 
+        self.retranslate_ui()
         self.load_products()
+
+    def retranslate_ui(self) -> None:
+        self._title_label.setText(t("Products"))
+        self._create_button.setText(t("New Product"))
+        self._edit_button.setText(t("Edit Product"))
+        self._activate_button.setText(t("Activate Product"))
+        self._deactivate_button.setText(t("Deactivate Product"))
+        self._refresh_button.setText(t("Refresh"))
+        self._table.setHorizontalHeaderLabels(
+            [
+                t("ID"),
+                t("Name"),
+                t("Supplier"),
+                t("Base Price"),
+                t("Track Stock"),
+                t("Status"),
+                t("Variant Summary"),
+            ]
+        )
+        self._refresh_table_text()
 
     def open_create_dialog(self) -> None:
         dialog = ProductDialog(self)
@@ -93,8 +113,8 @@ class ProductsPage(QWidget):
         if product_id is None:
             QMessageBox.information(
                 self,
-                "No product selected",
-                "Select a product to edit.",
+                t("No product selected"),
+                t("Select a product to edit."),
             )
             return
 
@@ -124,8 +144,8 @@ class ProductsPage(QWidget):
         if product_id is None:
             QMessageBox.information(
                 self,
-                "No product selected",
-                f"Select a product to {action_label}.",
+                t("No product selected"),
+                t(f"Select a product to {action_label}."),
             )
             return
 
@@ -134,15 +154,15 @@ class ProductsPage(QWidget):
             status = "active" if is_active else "inactive"
             QMessageBox.information(
                 self,
-                f"Product already {status}",
-                f"The selected product is already {status}.",
+                t(f"Product already {status}"),
+                t(f"The selected product is already {status}."),
             )
             return
 
-        confirmed = QMessageBox.question(
+        confirmed = question(
             self,
-            f"{action_label.title()} product",
-            f"{action_label.title()} the selected product?",
+            t(f"{action_label.title()} product"),
+            t(f"{action_label.title()} the selected product?"),
         )
 
         if confirmed != QMessageBox.Yes:
@@ -151,7 +171,7 @@ class ProductsPage(QWidget):
         try:
             session = SessionLocal()
         except Exception as exc:
-            QMessageBox.critical(self, f"Could not {action_label} product", str(exc))
+            QMessageBox.critical(self, t(f"Could not {action_label} product"), str(exc))
             return
 
         try:
@@ -161,7 +181,7 @@ class ProductsPage(QWidget):
             self.load_products()
         except Exception as exc:
             session.rollback()
-            QMessageBox.critical(self, f"Could not {action_label} product", str(exc))
+            QMessageBox.critical(self, t(f"Could not {action_label} product"), str(exc))
         finally:
             session.close()
 
@@ -185,13 +205,13 @@ class ProductsPage(QWidget):
         self._table.setRowCount(0)
         QMessageBox.critical(
             self,
-            "Could not load products",
+            t("Could not load products"),
             str(exc),
         )
 
     def _build_variant_summary(self, product: ProductListItem) -> str:
         if not product.variants:
-            return "No variants"
+            return t("No variants")
 
         summaries: list[str] = []
 
@@ -200,7 +220,7 @@ class ProductsPage(QWidget):
 
             if not label:
                 parts = [part for part in [variant.size, variant.color] if part]
-                label = " / ".join(parts) if parts else "Default"
+                label = " / ".join(parts) if parts else t("Default")
 
             summaries.append(label)
 
@@ -212,8 +232,8 @@ class ProductsPage(QWidget):
         for row, product in enumerate(products):
             base_price_text = "" if product.base_price is None else str(product.base_price)
             supplier_text = product.supplier_name or ""
-            track_stock_text = "Yes" if product.track_stock else "No"
-            status_text = "Active" if product.is_active else "Inactive"
+            track_stock_text = t("Yes") if product.track_stock else t("No")
+            status_text = t("Active") if product.is_active else t("Inactive")
             variant_summary_text = self._build_variant_summary(product)
 
             items = [
@@ -236,6 +256,10 @@ class ProductsPage(QWidget):
 
             for column, item in enumerate(items):
                 self._table.setItem(row, column, item)
+
+    def _refresh_table_text(self) -> None:
+        if self._table.rowCount() > 0:
+            self.load_products()
 
     def _selected_product_id(self) -> int | None:
         selected_items = self._table.selectedItems()

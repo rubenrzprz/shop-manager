@@ -18,6 +18,8 @@ from app.application.services.customers import (
 )
 from app.domain.enums import CustomerType
 from app.infrastructure.db.session import SessionLocal
+from app.ui.dialog_helpers import translate_button_box
+from app.ui.localization import t
 
 
 class CustomerDialog(QDialog):
@@ -27,12 +29,12 @@ class CustomerDialog(QDialog):
         self._customer_id = customer_id
         self._customer: CustomerEditItem | None = None
 
-        self.setWindowTitle("Edit Customer" if customer_id is not None else "Create Customer")
+        self.setWindowTitle(t("Edit Customer") if customer_id is not None else t("Create Customer"))
         self.resize(520, 500)
 
         self._customer_type_input = QComboBox()
-        self._customer_type_input.addItem("Individual", CustomerType.INDIVIDUAL)
-        self._customer_type_input.addItem("Company", CustomerType.COMPANY)
+        self._customer_type_input.addItem(t("Individual"), CustomerType.INDIVIDUAL)
+        self._customer_type_input.addItem(t("Company"), CustomerType.COMPANY)
         self._name_input = QLineEdit()
         self._company_name_input = QLineEdit()
         self._tax_id_input = QLineEdit()
@@ -45,25 +47,26 @@ class CustomerDialog(QDialog):
         self._country_input = QLineEdit()
         self._notes_input = QPlainTextEdit()
         self._notes_input.setFixedHeight(90)
-        self._is_active_checkbox = QCheckBox("Active")
+        self._is_active_checkbox = QCheckBox(t("Active"))
         self._is_active_checkbox.setChecked(True)
 
         form = QFormLayout()
-        form.addRow("Type", self._customer_type_input)
-        form.addRow("Name", self._name_input)
-        form.addRow("Company name", self._company_name_input)
-        form.addRow("Tax ID", self._tax_id_input)
-        form.addRow("Phone", self._phone_input)
-        form.addRow("Email", self._email_input)
-        form.addRow("Address line 1", self._address_line_1_input)
-        form.addRow("Address line 2", self._address_line_2_input)
-        form.addRow("Postal code", self._postal_code_input)
-        form.addRow("City", self._city_input)
-        form.addRow("Country", self._country_input)
-        form.addRow("Notes", self._notes_input)
+        form.addRow(t("Type"), self._customer_type_input)
+        form.addRow(t("Name"), self._name_input)
+        form.addRow(t("Company name"), self._company_name_input)
+        form.addRow(t("Tax ID"), self._tax_id_input)
+        form.addRow(t("Phone"), self._phone_input)
+        form.addRow(t("Email"), self._email_input)
+        form.addRow(t("Address line 1"), self._address_line_1_input)
+        form.addRow(t("Address line 2"), self._address_line_2_input)
+        form.addRow(t("Postal code"), self._postal_code_input)
+        form.addRow(t("City"), self._city_input)
+        form.addRow(t("Country"), self._country_input)
+        form.addRow(t("Notes"), self._notes_input)
         form.addRow("", self._is_active_checkbox)
 
         self._buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        translate_button_box(self._buttons)
         self._buttons.accepted.connect(self._on_accept)
         self._buttons.rejected.connect(self.reject)
 
@@ -82,7 +85,7 @@ class CustomerDialog(QDialog):
         try:
             session = SessionLocal()
         except Exception as exc:
-            QMessageBox.critical(self, "Could not load customer", str(exc))
+            QMessageBox.critical(self, t("Could not load customer"), str(exc))
             self.reject()
             return
 
@@ -90,7 +93,7 @@ class CustomerDialog(QDialog):
             self._customer = GetCustomerForEditService(session).execute(self._customer_id)
             self._populate_customer_form(self._customer)
         except Exception as exc:
-            QMessageBox.critical(self, "Could not load customer", str(exc))
+            QMessageBox.critical(self, t("Could not load customer"), str(exc))
             self.reject()
         finally:
             session.close()
@@ -122,7 +125,7 @@ class CustomerDialog(QDialog):
         try:
             session = SessionLocal()
         except Exception as exc:
-            QMessageBox.critical(self, "Could not save customer", str(exc))
+            QMessageBox.critical(self, t("Could not save customer"), str(exc))
             return
 
         try:
@@ -135,7 +138,7 @@ class CustomerDialog(QDialog):
             self.accept()
         except Exception as exc:
             session.rollback()
-            QMessageBox.critical(self, "Could not save customer", str(exc))
+            QMessageBox.critical(self, t("Could not save customer"), str(exc))
         finally:
             session.close()
 

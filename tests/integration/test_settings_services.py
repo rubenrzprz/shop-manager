@@ -83,6 +83,26 @@ def test_application_settings_service_saves_strict_order_workflow(db_session):
     assert not ApplicationSettingsService(db_session).strict_order_workflow_enabled()
 
 
+def test_application_settings_service_defaults_app_language_to_english(db_session):
+    settings = ApplicationSettingsService(db_session).get_settings()
+
+    assert settings.app_language == "en"
+
+
+def test_application_settings_service_saves_app_language(db_session):
+    service = ApplicationSettingsService(db_session)
+
+    service.set_app_language("es")
+    db_session.commit()
+
+    assert ApplicationSettingsService(db_session).app_language() == "es"
+
+
+def test_application_settings_service_rejects_unsupported_app_language(db_session):
+    with pytest.raises(ValueError, match="Application language must be one of: en, es."):
+        ApplicationSettingsService(db_session).set_app_language("fr")
+
+
 def test_order_edit_policy_uses_strict_order_workflow_setting(db_session):
     order, customer, variant = create_confirmed_order(db_session)
 
