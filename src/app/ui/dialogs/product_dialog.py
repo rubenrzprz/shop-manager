@@ -61,7 +61,7 @@ class ProductDialog(QDialog):
         self._description_input.setFixedHeight(90)
 
         self._base_price_input = QLineEdit()
-        self._track_stock_checkbox = QCheckBox(t("Track stock"))
+        self._track_stock_checkbox = QCheckBox(t("Track Stock"))
 
         self._variant_name_input = QLineEdit()
         self._variant_name_input.setPlaceholderText(t("Default"))
