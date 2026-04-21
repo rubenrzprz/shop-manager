@@ -31,6 +31,7 @@ class CreateProductInput:
     base_price: Decimal | None = None
     track_stock: bool = False
     is_active: bool = True
+    category_ids: list[int] = field(default_factory=list)
     variants: list[CreateProductVariantInput] = field(default_factory=list)
 
 
@@ -53,7 +54,15 @@ class UpdateProductInput:
     description: str | None | _Unset = UNSET
     base_price: Decimal | None | _Unset = UNSET
     track_stock: bool | _Unset = UNSET
+    category_ids: list[int] | _Unset = UNSET
     default_variant: UpdateProductVariantInput | None = None
+
+
+@dataclass(frozen=True)
+class ProductCategorySummary:
+    id: int
+    name: str
+    is_active: bool
 
 
 @dataclass(frozen=True)
@@ -80,6 +89,7 @@ class ProductEditItem:
     base_price: Decimal | None
     track_stock: bool
     is_active: bool
+    categories: list[ProductCategorySummary]
     default_variant: ProductVariantEditItem
     variants: list[ProductVariantEditItem]
 
@@ -114,6 +124,7 @@ class ProductListItem:
     base_price: Decimal | None
     track_stock: bool
     is_active: bool
+    categories: list[ProductCategorySummary]
     variants: list[ProductVariantListItem]
 
 
@@ -129,3 +140,4 @@ class ProductVariantPickerItem:
     price: Decimal | None
     product_is_active: bool
     variant_is_active: bool
+    category_names: list[str] = field(default_factory=list)

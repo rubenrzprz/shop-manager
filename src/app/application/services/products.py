@@ -2,11 +2,12 @@ import re
 from decimal import Decimal
 
 import unicodedata
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload, joinedload
 
 from app.application.dto.products import (
     CreateProductInput,
+    ProductCategorySummary,
     CreateProductVariantInput,
     ProductEditItem,
     ProductListItem,
@@ -18,7 +19,8 @@ from app.application.dto.products import (
     UpdateProductInput,
     UpdateProductVariantInput,
 )
-from app.infrastructure.db.models import Product, ProductVariant
+from app.infrastructure.db.models import Product, ProductCategory, ProductVariant
+from app.infrastructure.db.models.products import product_category_assignments
 from app.infrastructure.db.models.suppliers import Supplier
 
 
@@ -37,9 +39,11 @@ class CreateProductService:
             track_stock=data.track_stock,
             is_active=data.is_active and any(variant.is_active for variant in data.variants),
         )
+        product.categories = self._load_categories(data.category_ids)
 
         self._session.add(product)
         self._session.flush()
+        self._set_category_order(product.id, data.category_ids)
         try:
             self._validate_final_variant_skus(product.name, product.id, data.variants)
         except ValueError:
@@ -84,6 +88,9 @@ class CreateProductService:
         if not data.variants:
             raise ValueError("A product must have at least one variant.")
 
+        if len(data.category_ids) != len(set(data.category_ids)):
+            raise ValueError("Product categories must be unique.")
+
         self._validate_decimal_amount(
             data.base_price,
             "Product base price must be a finite number.",
@@ -99,6 +106,45 @@ class CreateProductService:
 
         if len(provided_skus) != len(set(provided_skus)):
             raise ValueError("Variant SKUs must be unique within the request.")
+
+    def _load_categories(
+        self,
+        category_ids: list[int],
+        allow_inactive_category_ids: set[int] | None = None,
+    ) -> list[ProductCategory]:
+        if not category_ids:
+            return []
+
+        allowed_inactive_ids = allow_inactive_category_ids or set()
+        categories = self._session.scalars(
+            select(ProductCategory).where(ProductCategory.id.in_(category_ids))
+        ).all()
+        categories_by_id = {category.id: category for category in categories}
+
+        if set(category_ids) != set(categories_by_id):
+            raise ValueError("Product category not found.")
+
+        inactive_category = next(
+            (
+                category
+                for category in categories
+                if not category.is_active and category.id not in allowed_inactive_ids
+            ),
+            None,
+        )
+        if inactive_category is not None:
+            raise ValueError("Product category must be active.")
+
+        return [categories_by_id[category_id] for category_id in category_ids]
+
+    def _set_category_order(self, product_id: int, category_ids: list[int]) -> None:
+        for sort_order, category_id in enumerate(category_ids):
+            self._session.execute(
+                update(product_category_assignments)
+                .where(product_category_assignments.c.product_id == product_id)
+                .where(product_category_assignments.c.category_id == category_id)
+                .values(sort_order=sort_order)
+            )
 
     def _validate_final_variant_skus(
         self,
@@ -197,6 +243,7 @@ class ListProductsService:
             .options(
                 joinedload(Product.supplier),
                 selectinload(Product.variants),
+                selectinload(Product.categories),
             )
             .order_by(Product.id)
         )
@@ -232,11 +279,23 @@ class ListProductsService:
                     base_price=product.base_price,
                     track_stock=product.track_stock,
                     is_active=product.is_active,
+                    categories=self._category_summaries(product),
                     variants=variants,
                 )
             )
 
         return result
+
+    @staticmethod
+    def _category_summaries(product: Product) -> list[ProductCategorySummary]:
+        return [
+            ProductCategorySummary(
+                id=category.id,
+                name=category.name,
+                is_active=category.is_active,
+            )
+            for category in product.categories
+        ]
 
 
 class ListProductFormSuppliersService:
@@ -264,7 +323,7 @@ class ListProductVariantPickerOptionsService:
         statement = (
             select(ProductVariant)
             .join(ProductVariant.product)
-            .options(joinedload(ProductVariant.product))
+            .options(joinedload(ProductVariant.product).selectinload(Product.categories))
             .order_by(Product.name, ProductVariant.id)
         )
         variants = self._session.scalars(statement).all()
@@ -285,6 +344,10 @@ class ListProductVariantPickerOptionsService:
                 ),
                 product_is_active=variant.product.is_active,
                 variant_is_active=variant.is_active,
+                category_names=[
+                    category.name
+                    for category in variant.product.categories
+                ],
             )
             for variant in variants
         ]
@@ -301,6 +364,7 @@ class GetProductForEditService:
             options=[
                 joinedload(Product.supplier),
                 selectinload(Product.variants),
+                selectinload(Product.categories),
             ],
         )
 
@@ -333,6 +397,7 @@ class GetProductForEditService:
             base_price=product.base_price,
             track_stock=product.track_stock,
             is_active=product.is_active,
+            categories=ListProductsService._category_summaries(product),
             default_variant=ProductVariantEditItem(
                 id=default_variant.id,
                 sku=default_variant.sku,
@@ -368,7 +433,7 @@ class UpdateProductService:
         product = self._session.get(
             Product,
             product_id,
-            options=[selectinload(Product.variants)],
+            options=[selectinload(Product.variants), selectinload(Product.categories)],
         )
 
         if product is None:
@@ -388,6 +453,14 @@ class UpdateProductService:
 
         if data.track_stock is not UNSET:
             product.track_stock = data.track_stock
+
+        if data.category_ids is not UNSET:
+            self._validate_unique_category_ids(data.category_ids)
+            existing_category_ids = {category.id for category in product.categories}
+            product.categories = self._load_categories(
+                data.category_ids,
+                allow_inactive_category_ids=existing_category_ids,
+            )
 
         if data.default_variant is not None:
             variant = self._find_product_variant(product, data.default_variant.variant_id)
@@ -414,6 +487,8 @@ class UpdateProductService:
                 variant.stock_minimum = data.default_variant.stock_minimum
 
         self._session.flush()
+        if data.category_ids is not UNSET:
+            CreateProductService(self._session)._set_category_order(product.id, data.category_ids)
 
         return product
 
@@ -430,6 +505,9 @@ class UpdateProductService:
 
         if data.default_variant is not None:
             self._validate_variant_input(data.default_variant)
+
+        if data.category_ids is not UNSET:
+            self._validate_unique_category_ids(data.category_ids)
 
     def _validate_variant_input(self, variant: UpdateProductVariantInput) -> None:
         if variant.price_override is not UNSET:
@@ -448,12 +526,27 @@ class UpdateProductService:
                 raise ValueError("Default variant stock_minimum cannot be negative.")
 
     @staticmethod
+    def _validate_unique_category_ids(category_ids: list[int]) -> None:
+        if len(category_ids) != len(set(category_ids)):
+            raise ValueError("Product categories must be unique.")
+
+    @staticmethod
     def _find_product_variant(product: Product, variant_id: int) -> ProductVariant:
         for variant in product.variants:
             if variant.id == variant_id:
                 return variant
 
         raise ValueError("Product variant not found.")
+
+    def _load_categories(
+        self,
+        category_ids: list[int],
+        allow_inactive_category_ids: set[int] | None = None,
+    ) -> list[ProductCategory]:
+        return CreateProductService(self._session)._load_categories(
+            category_ids,
+            allow_inactive_category_ids=allow_inactive_category_ids,
+        )
 
 
 class ProductStatusService:
