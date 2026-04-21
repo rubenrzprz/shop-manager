@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -9,14 +9,19 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QHeaderView,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -29,6 +34,8 @@ from app.application.dto.products import (
     UpdateProductInput,
     UpdateProductVariantInput,
 )
+from app.application.dto.product_categories import ProductCategoryOption
+from app.application.services.product_categories import ListProductCategoryOptionsService
 from app.application.services.products import (
     CreateProductService,
     CreateProductVariantService,
@@ -69,6 +76,8 @@ class ProductDialog(QDialog):
         self._selected_supplier_name: str | None = None
         self._create_variants: list[CreateProductVariantInput] = []
         self._variant_drafts: list[_VariantDraft] = []
+        self._category_options: list[ProductCategoryOption] = []
+        self._selected_category_ids: list[int] = []
 
         self.setWindowTitle(
             t("Edit Product") if self._product_id is not None else t("Create Product")
@@ -104,6 +113,43 @@ class ProductDialog(QDialog):
         product_layout.addLayout(product_form)
         product_layout.addStretch()
         product_tab.setLayout(product_layout)
+
+        categories_tab = QWidget()
+        categories_layout = QVBoxLayout()
+        self._selected_categories_label = QLabel(t("Selected Categories"))
+        self._selected_categories_list = QListWidget()
+        self._selected_categories_list.setDragDropMode(QAbstractItemView.InternalMove)
+        self._selected_categories_list.setDefaultDropAction(Qt.MoveAction)
+        self._selected_categories_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._selected_categories_list.setFixedHeight(108)
+        self._selected_categories_list.model().rowsMoved.connect(
+            lambda *_args: QTimer.singleShot(0, self._handle_selected_categories_reordered)
+        )
+        self._available_categories_label = QLabel(t("Available Categories"))
+        self._categories_table = QTableWidget()
+        self._categories_table.setColumnCount(3)
+        self._categories_table.setHorizontalHeaderLabels(
+            [t("Category"), t("Description"), t("Status")]
+        )
+        self._categories_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._categories_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._categories_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._categories_table.verticalHeader().setVisible(False)
+        self._categories_table.setAlternatingRowColors(True)
+        self._categories_table.doubleClicked.connect(self._add_selected_category)
+        categories_header = self._categories_table.horizontalHeader()
+        categories_header.setSectionResizeMode(0, QHeaderView.Stretch)
+        categories_header.setSectionResizeMode(1, QHeaderView.Stretch)
+        categories_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self._add_category_button = QPushButton(t("Add Category"))
+        self._add_category_button.clicked.connect(self._add_selected_category)
+
+        categories_layout.addWidget(self._selected_categories_label)
+        categories_layout.addWidget(self._selected_categories_list)
+        categories_layout.addWidget(self._available_categories_label)
+        categories_layout.addWidget(self._categories_table)
+        categories_layout.addWidget(self._add_category_button)
+        categories_tab.setLayout(categories_layout)
 
         variants_tab = QWidget()
         variants_layout = QVBoxLayout()
@@ -150,6 +196,7 @@ class ProductDialog(QDialog):
 
         self._tabs = QTabWidget()
         self._tabs.addTab(product_tab, t("Product Details"))
+        self._tabs.addTab(categories_tab, t("Categories"))
         self._tabs.addTab(variants_tab, t("Variants"))
 
         self._buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -161,6 +208,8 @@ class ProductDialog(QDialog):
         layout.addWidget(self._tabs)
         layout.addWidget(self._buttons)
         self.setLayout(layout)
+
+        self._load_category_options()
 
         if self._product_id is None:
             self._populate_create_variants_table()
@@ -205,6 +254,8 @@ class ProductDialog(QDialog):
             "" if product.base_price is None else str(product.base_price)
         )
         self._track_stock_checkbox.setChecked(product.track_stock)
+        self._selected_category_ids = [category.id for category in product.categories]
+        self._populate_categories_table()
         self._variant_drafts = [
             _VariantDraft(
                 id=variant.id,
@@ -267,6 +318,7 @@ class ProductDialog(QDialog):
                         description=description,
                         base_price=base_price,
                         track_stock=track_stock,
+                        category_ids=self._selected_category_ids_from_table(),
                         variants=self._create_variants,
                     )
                 )
@@ -282,6 +334,7 @@ class ProductDialog(QDialog):
                         description=description,
                         base_price=base_price,
                         track_stock=track_stock,
+                        category_ids=self._selected_category_ids_from_table(),
                     ),
                 )
                 self._apply_pending_variant_changes(session)
@@ -358,6 +411,162 @@ class ProductDialog(QDialog):
 
             for column, item in enumerate(items):
                 self._variants_table.setItem(row_index, column, item)
+
+    def _load_category_options(self) -> None:
+        try:
+            session = SessionLocal()
+        except Exception as exc:
+            QMessageBox.critical(self, t("Could not load categories"), str(exc))
+            return
+
+        try:
+            self._category_options = ListProductCategoryOptionsService(session).execute()
+            self._populate_categories_table()
+        except Exception as exc:
+            QMessageBox.critical(self, t("Could not load categories"), t(str(exc)))
+        finally:
+            session.close()
+
+    def _populate_categories_table(self) -> None:
+        self._categories_table.setHorizontalHeaderLabels(
+            [t("Category"), t("Description"), t("Status")]
+        )
+        available_categories = [
+            category
+            for category in self._category_options
+            if category.id not in self._selected_category_ids
+        ]
+        self._categories_table.setRowCount(len(available_categories))
+
+        for row, category in enumerate(available_categories):
+            name_item = QTableWidgetItem(category.name)
+            description_item = QTableWidgetItem(category.description or "")
+            status_item = QTableWidgetItem(t("Active") if category.is_active else t("Inactive"))
+            name_item.setData(Qt.UserRole, category.id)
+
+            for item in [name_item, description_item, status_item]:
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                if not category.is_active:
+                    item.setForeground(QColor("#777777"))
+                    item.setBackground(QColor("#f2f2f2"))
+
+            self._categories_table.setItem(row, 0, name_item)
+            self._categories_table.setItem(row, 1, description_item)
+            self._categories_table.setItem(row, 2, status_item)
+        self._populate_selected_categories()
+
+    def _populate_selected_categories(self) -> None:
+        self._selected_categories_list.clear()
+
+        selected_options = [
+            option
+            for category_id in self._selected_category_ids
+            for option in self._category_options
+            if option.id == category_id
+        ]
+
+        if not selected_options:
+            item = QListWidgetItem(t("No categories selected"))
+            item.setFlags(item.flags() & ~Qt.ItemIsDragEnabled)
+            item.setForeground(QColor("#777777"))
+            self._selected_categories_list.addItem(item)
+            return
+
+        for index, category in enumerate(selected_options):
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, category.id)
+            item.setSizeHint(self._selected_category_item_widget(category, index == 0).sizeHint())
+            self._selected_categories_list.addItem(item)
+            self._selected_categories_list.setItemWidget(
+                item,
+                self._selected_category_item_widget(category, index == 0),
+            )
+
+    def _selected_category_ids_from_table(self) -> list[int]:
+        self._sync_selected_categories_from_list()
+        return list(self._selected_category_ids)
+
+    def _add_selected_category(self) -> None:
+        self._sync_selected_categories_from_list()
+        category_id = self._selected_available_category_id()
+        if category_id is None:
+            return
+
+        category = next(
+            (option for option in self._category_options if option.id == category_id),
+            None,
+        )
+        if category is None or not category.is_active:
+            return
+
+        self._selected_category_ids.append(category_id)
+        self._populate_categories_table()
+
+    def _remove_category(self, category_id: int) -> None:
+        for row in range(self._selected_categories_list.count()):
+            item = self._selected_categories_list.item(row)
+            if item.data(Qt.UserRole) == category_id:
+                self._selected_categories_list.takeItem(row)
+                break
+        self._sync_selected_categories_from_list()
+        self._populate_categories_table()
+
+    def _selected_available_category_id(self) -> int | None:
+        row = self._categories_table.currentRow()
+        if row < 0:
+            return None
+
+        item = self._categories_table.item(row, 0)
+        if item is None:
+            return None
+
+        return item.data(Qt.UserRole)
+
+    def _sync_selected_categories_from_list(self) -> None:
+        category_ids: list[int] = []
+        for row in range(self._selected_categories_list.count()):
+            item = self._selected_categories_list.item(row)
+            category_id = item.data(Qt.UserRole)
+            if category_id is not None:
+                category_ids.append(category_id)
+
+        self._selected_category_ids = category_ids
+
+    def _handle_selected_categories_reordered(self) -> None:
+        self._sync_selected_categories_from_list()
+        self._populate_categories_table()
+
+    def _selected_category_item_widget(
+        self,
+        category: ProductCategoryOption,
+        is_primary: bool,
+    ) -> QWidget:
+        widget = QWidget()
+        widget.setStyleSheet(
+            "background: #d9ecff; border: 1px solid #7fb3df; border-radius: 4px;"
+            if is_primary
+            else "background: #f4f8fc; border: 1px solid #c7d6e4; border-radius: 4px;"
+        )
+        layout = QHBoxLayout()
+        layout.setContentsMargins(8, 2, 6, 2)
+        layout.setSpacing(6)
+        label = QLabel(category.name)
+        if is_primary:
+            label.setStyleSheet("font-weight: 600; border: 0; background: transparent;")
+        else:
+            label.setStyleSheet("border: 0; background: transparent;")
+        remove_button = QToolButton()
+        remove_button.setText("x")
+        remove_button.setAutoRaise(True)
+        remove_button.setFixedSize(22, 22)
+        remove_button.clicked.connect(
+            lambda _checked=False, category_id=category.id: self._remove_category(category_id)
+        )
+        layout.addWidget(label)
+        layout.addStretch()
+        layout.addWidget(remove_button)
+        widget.setLayout(layout)
+        return widget
 
     def _variant_price_text(self, price_override: Decimal | None) -> str:
         price = price_override
