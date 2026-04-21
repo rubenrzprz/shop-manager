@@ -13,7 +13,7 @@ application services to keep business logic out of the interface layer.
 
 ## What It Does Today ✅
 
-- 📦 Products: create, list, edit core fields/default variant, activate/deactivate
+- 📦 Products: create, list, edit, manage variants, activate/deactivate
 - 🤝 Suppliers: create, list, edit
 - 👥 Customers: create, list, edit
 - 🧾 Orders: create, edit, calculate totals, apply discounts, validate deadlines
@@ -25,7 +25,7 @@ application services to keep business logic out of the interface layer.
 ## What Is Coming 🧭
 
 - ✅ Standalone tasks and order-linked reminders
-- 🧩 Full product variant management
+- 🏷️ Flexible product categories
 - 🔁 Recurring task generation through a configurable planning horizon
 - 📅 Calendar-based task planning
 - 📦 Stock movements
@@ -157,10 +157,10 @@ SQLAlchemy models stay behind service boundaries.
 
 Near-term implementation path:
 
-1. Product variant management
-   - add variants to existing products
-   - edit non-default variants
-   - activate/deactivate variants
+1. Product categories
+   - create flexible product-level categories
+   - assign products to multiple categories
+   - variants inherit parent product categories for now
 2. Basic tasks
    - create standalone reminders
    - list tasks due today
