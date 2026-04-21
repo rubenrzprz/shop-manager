@@ -12,7 +12,11 @@ from app.application.dto.orders import (
 )
 from app.application.dto.products import CreateProductInput, CreateProductVariantInput
 from app.application.services.customers import CreateCustomerService
-from app.application.services.orders import CreateOrderService, UpdateOrderService
+from app.application.services.orders import (
+    CreateOrderService,
+    UpdateOrderService,
+    UpdateOrderStatusService,
+)
 from app.application.services.products import CreateProductService
 from app.application.services.settings import ApplicationSettingsService
 from app.domain.enums import CustomerType, DiscountType, OrderStatus
@@ -86,6 +90,24 @@ def create_confirmed_order(db_session):
     return order, customer, variant
 
 
+def create_order_with_status(db_session, customer, variant, status: OrderStatus):
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 19),
+            lines=[
+                CreateOrderLineInput(
+                    product_variant_id=variant.id,
+                    quantity=1,
+                )
+            ],
+        )
+    )
+    order.status = status
+    db_session.flush()
+    return order
+
+
 def test_application_settings_service_defaults_strict_order_workflow_to_false(db_session):
     settings = ApplicationSettingsService(db_session).get_settings()
 
@@ -124,6 +146,153 @@ def test_application_settings_service_saves_app_language(db_session):
 def test_application_settings_service_rejects_unsupported_app_language(db_session):
     with pytest.raises(ValueError, match="Application language must be one of: en, es."):
         ApplicationSettingsService(db_session).set_app_language("fr")
+
+
+def test_application_settings_service_defaults_enabled_order_statuses(db_session):
+    settings = ApplicationSettingsService(db_session).get_settings()
+
+    assert settings.enabled_order_statuses == (
+        OrderStatus.DRAFT,
+        OrderStatus.CONFIRMED,
+        OrderStatus.IN_PROGRESS,
+        OrderStatus.READY,
+        OrderStatus.COMPLETED,
+        OrderStatus.CANCELLED,
+    )
+
+
+def test_application_settings_service_saves_enabled_order_statuses(db_session):
+    service = ApplicationSettingsService(db_session)
+
+    service.set_enabled_order_statuses(
+        (
+            OrderStatus.DRAFT,
+            OrderStatus.CONFIRMED,
+            OrderStatus.COMPLETED,
+            OrderStatus.CANCELLED,
+        )
+    )
+    db_session.commit()
+
+    assert ApplicationSettingsService(db_session).enabled_order_statuses() == (
+        OrderStatus.DRAFT,
+        OrderStatus.CONFIRMED,
+        OrderStatus.COMPLETED,
+        OrderStatus.CANCELLED,
+    )
+
+
+def test_application_settings_service_rejects_missing_required_order_statuses(db_session):
+    with pytest.raises(ValueError, match="Enabled order statuses must include"):
+        ApplicationSettingsService(db_session).set_enabled_order_statuses(
+            (
+                OrderStatus.DRAFT,
+                OrderStatus.CONFIRMED,
+                OrderStatus.COMPLETED,
+            )
+        )
+
+
+def test_application_settings_service_counts_orders_that_will_return_to_draft(db_session):
+    _confirmed_order, customer, variant = create_confirmed_order(db_session)
+    create_order_with_status(db_session, customer, variant, OrderStatus.IN_PROGRESS)
+    create_order_with_status(db_session, customer, variant, OrderStatus.READY)
+    create_order_with_status(db_session, customer, variant, OrderStatus.COMPLETED)
+
+    counts = ApplicationSettingsService(db_session).disabled_order_status_conversion_counts(
+        (
+            OrderStatus.DRAFT,
+            OrderStatus.CONFIRMED,
+            OrderStatus.COMPLETED,
+            OrderStatus.CANCELLED,
+        )
+    )
+
+    assert counts == {
+        OrderStatus.IN_PROGRESS: 1,
+        OrderStatus.READY: 1,
+    }
+
+
+def test_application_settings_service_converts_disabled_status_orders_to_draft(db_session):
+    confirmed_order, customer, variant = create_confirmed_order(db_session)
+    in_progress_order = create_order_with_status(
+        db_session, customer, variant, OrderStatus.IN_PROGRESS
+    )
+    ready_order = create_order_with_status(db_session, customer, variant, OrderStatus.READY)
+    completed_order = create_order_with_status(db_session, customer, variant, OrderStatus.COMPLETED)
+
+    ApplicationSettingsService(db_session).set_enabled_order_statuses(
+        (
+            OrderStatus.DRAFT,
+            OrderStatus.CONFIRMED,
+            OrderStatus.COMPLETED,
+            OrderStatus.CANCELLED,
+        )
+    )
+    db_session.commit()
+    for order in (confirmed_order, in_progress_order, ready_order, completed_order):
+        db_session.refresh(order)
+
+    assert confirmed_order.status == OrderStatus.CONFIRMED
+    assert in_progress_order.status == OrderStatus.DRAFT
+    assert ready_order.status == OrderStatus.DRAFT
+    assert completed_order.status == OrderStatus.COMPLETED
+
+
+def test_order_status_service_skips_disabled_order_statuses(db_session):
+    ApplicationSettingsService(db_session).set_enabled_order_statuses(
+        (
+            OrderStatus.DRAFT,
+            OrderStatus.CONFIRMED,
+            OrderStatus.COMPLETED,
+            OrderStatus.CANCELLED,
+        )
+    )
+    db_session.commit()
+
+    service = UpdateOrderStatusService(db_session)
+
+    assert service.next_forward_status(OrderStatus.DRAFT) == OrderStatus.CONFIRMED
+    assert service.next_forward_status(OrderStatus.CONFIRMED) == OrderStatus.COMPLETED
+    assert service.previous_status(OrderStatus.COMPLETED) == OrderStatus.CONFIRMED
+    assert service.previous_status(OrderStatus.CONFIRMED) == OrderStatus.DRAFT
+
+
+def test_order_status_service_executes_skipped_status_transitions(db_session):
+    order, _customer, _variant = create_confirmed_order(db_session)
+    order.status = OrderStatus.DRAFT
+    ApplicationSettingsService(db_session).set_enabled_order_statuses(
+        (
+            OrderStatus.DRAFT,
+            OrderStatus.CONFIRMED,
+            OrderStatus.COMPLETED,
+            OrderStatus.CANCELLED,
+        )
+    )
+    db_session.commit()
+
+    service = UpdateOrderStatusService(db_session)
+
+    assert service.execute(order.id, OrderStatus.CONFIRMED).status == OrderStatus.CONFIRMED
+    assert service.execute(order.id, OrderStatus.COMPLETED).status == OrderStatus.COMPLETED
+
+
+def test_order_status_service_keeps_cancel_and_recovery_explicit(db_session):
+    ApplicationSettingsService(db_session).set_enabled_order_statuses(
+        (
+            OrderStatus.DRAFT,
+            OrderStatus.COMPLETED,
+            OrderStatus.CANCELLED,
+        )
+    )
+    db_session.commit()
+
+    service = UpdateOrderStatusService(db_session)
+
+    assert service.next_forward_status(OrderStatus.DRAFT) == OrderStatus.COMPLETED
+    assert service.can_transition(OrderStatus.DRAFT, OrderStatus.CANCELLED)
+    assert service.can_transition(OrderStatus.CANCELLED, OrderStatus.DRAFT)
 
 
 def test_order_edit_policy_uses_strict_order_workflow_setting(db_session):
