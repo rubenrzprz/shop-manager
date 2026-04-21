@@ -8,6 +8,7 @@ Shop Manager is a Python desktop application for store operations:
 - suppliers
 - customers
 - orders
+- dashboard reminders and tasks planned next
 - stock workflows later
 
 The stack is:
@@ -49,12 +50,14 @@ When the user types `git-clean`, do this:
 When the user types `capcp`, do this:
 
 - commit atomically
+- check whether `AGENTS.md` or `README.md` should be updated for the branch
 - push the branch
 - create a PR
 
 When the user types `capup`, do this:
 
 - commit atomically
+- check whether `AGENTS.md` or `README.md` should be updated for the branch
 - push the branch
 - update the existing PR body
 
@@ -95,7 +98,7 @@ Update this file when a change affects future agent behavior or project understa
 
 Do not update it for every small implementation detail. Keep it concise and focused on durable context that will help a future session.
 
-When doing `capcp` or `capup`, consider whether `AGENTS.md` needs a small update before pushing. If it does, include that update in an appropriate atomic commit.
+When doing `capcp` or `capup`, consider whether `AGENTS.md` or `README.md` needs a small update before pushing. If it does, include that update in an appropriate atomic commit.
 
 ## Commit Style
 
@@ -234,18 +237,59 @@ The project currently has these completed vertical slices:
 - Stock movements from orders are deferred.
 - Shipment workflows are deferred.
 
+## Dashboard And Task Reminder Plan
+
+- The app should eventually open on a dashboard, not directly on a management table.
+- Dashboard v1 should include shortcuts to core areas and a daily task/reminder section.
+- Persist tasks/reminders as application concepts; "daily events" are the dashboard/calendar view
+  of tasks due on a selected day.
+- Tasks should support standalone reminders, custom order-linked reminders, and recurring reminders.
+- Daily task sections should show overdue tasks, pending tasks for the selected day, and completed
+  tasks for that same day.
+- Recurring tasks should use a `TaskSeries` plus generated `Task` occurrences:
+  - `TaskSeries`: title, notes, optional order, recurrence type/interval, starts on, optional ends
+    on, active flag
+  - `Task`: optional series, optional order, title/notes snapshot, due date, completed timestamp
+- Recurring occurrences should be generated only through a configurable horizon, not forever.
+- Planned setting: `task_generation_horizon_days`, default `90`, likely allowed range `30` to
+  `365`.
+- On app startup, run an idempotent generation service that creates missing recurring task
+  occurrences through `today + task_generation_horizon_days`.
+- Generated recurring tasks should be unique per `task_series_id` and `due_date`.
+- Planned order follow-up setting: `default_order_follow_up_days`, likely default `7`.
+- Automatic order follow-up reminders should apply to active orders and stop when orders are
+  completed or cancelled.
+- See `docs/dashboard_tasks_roadmap.md` for the detailed implementation roadmap.
+
 ## Likely Next Steps
 
 When asked to propose the next logical step, consider this order:
 
-1. Localization polish
+1. Dashboard shell
+   - make Dashboard the app entry point
+   - add shortcuts to products, suppliers, customers, orders, and settings
+   - add overdue, pending, and completed daily task sections with empty states
+2. Basic task reminders
+   - add one-off task persistence, services, and tests
+   - list tasks due today and mark tasks complete/reopened
+3. Recurring task generation
+   - add task series persistence
+   - add `task_generation_horizon_days`
+   - generate missing occurrences on startup through the configured horizon
+4. Order-bound reminders
+   - add custom order-linked tasks
+   - add automatic order follow-up reminders with `default_order_follow_up_days`
+5. Calendar task view
+   - browse tasks by date
+   - create reminders directly on selected dates
+6. Localization polish
    - translate any newly added UI strings through the existing helper
    - consider service-layer message codes if application validation errors need full localization
    - consider broader formatting localization for currency/date display
-2. Stock movements
+7. Stock movements
    - reduce stock when an order reaches the appropriate status
    - do not mix stock behavior into basic order create/list
-3. Shipment workflows
+8. Shipment workflows
    - create/update shipment info for orders
 
 Prefer one small vertical slice per branch.
