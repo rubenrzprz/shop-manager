@@ -303,7 +303,7 @@ def test_update_order_service_updates_active_order_fields_lines_and_totals(db_se
     ]
 
 
-def test_update_order_service_rejects_terminal_order(db_session):
+def test_update_order_service_allows_terminal_order_notes_only(db_session):
     customer = create_customer(db_session)
     variant = create_product_variant(db_session)
     order = CreateOrderService(db_session).execute(
@@ -316,7 +316,32 @@ def test_update_order_service_rejects_terminal_order(db_session):
     order.status = OrderStatus.COMPLETED
     db_session.flush()
 
-    with pytest.raises(ValueError, match="Only active orders can be edited."):
+    existing_line = order.lines[0]
+
+    updated_order = UpdateOrderService(db_session).execute(
+        order.id,
+        UpdateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            notes="Completion note",
+            lines=[
+                UpdateOrderLineInput(
+                    order_line_id=existing_line.id,
+                    product_variant_id=existing_line.product_variant_id,
+                    quantity=existing_line.quantity,
+                    unit_price=existing_line.unit_price,
+                    notes=existing_line.notes,
+                )
+            ],
+        ),
+    )
+
+    assert updated_order.notes == "Completion note"
+
+    with pytest.raises(
+        ValueError,
+        match="Completed and cancelled orders cannot change order lines.",
+    ):
         UpdateOrderService(db_session).execute(
             order.id,
             UpdateOrderInput(
@@ -487,13 +512,33 @@ def test_update_order_status_service_allows_cancelling_active_orders(
     assert cancelled_order.status == OrderStatus.CANCELLED
 
 
+def test_update_order_status_service_allows_recovering_cancelled_order(db_session):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session)
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+        )
+    )
+    order.status = OrderStatus.CANCELLED
+    db_session.flush()
+
+    recovered_order = UpdateOrderStatusService(db_session).execute(
+        order.id,
+        OrderStatus.DRAFT,
+    )
+
+    assert recovered_order.status == OrderStatus.DRAFT
+
+
 @pytest.mark.parametrize(
     ("starting_status", "target_status"),
     [
         (OrderStatus.DRAFT, OrderStatus.READY),
         (OrderStatus.CONFIRMED, OrderStatus.COMPLETED),
         (OrderStatus.COMPLETED, OrderStatus.CANCELLED),
-        (OrderStatus.CANCELLED, OrderStatus.DRAFT),
         (OrderStatus.CANCELLED, OrderStatus.CONFIRMED),
     ],
 )

@@ -15,7 +15,7 @@ from app.application.services.customers import CreateCustomerService
 from app.application.services.orders import CreateOrderService, UpdateOrderService
 from app.application.services.products import CreateProductService
 from app.application.services.settings import ApplicationSettingsService
-from app.domain.enums import CustomerType, OrderStatus
+from app.domain.enums import CustomerType, DiscountType, OrderStatus
 
 
 def create_customer(db_session):
@@ -41,6 +41,29 @@ def create_product_variant(db_session):
         )
     )
     return product.variants[0]
+
+
+def update_input_for_order(order, customer, *, quantity: int = 1, **overrides):
+    data = {
+        "customer_id": customer.id,
+        "order_date": order.order_date,
+        "deadline": order.deadline,
+        "discount_type": order.discount_type,
+        "discount_value": order.discount_value,
+        "notes": order.notes,
+        "lines": [
+            UpdateOrderLineInput(
+                order_line_id=line.id,
+                product_variant_id=line.product_variant_id,
+                quantity=quantity,
+                unit_price=line.unit_price,
+                notes=line.notes,
+            )
+            for line in sorted(order.lines, key=lambda order_line: order_line.id)
+        ],
+    }
+    data.update(overrides)
+    return UpdateOrderInput(**data)
 
 
 def create_confirmed_order(db_session):
@@ -123,20 +146,101 @@ def test_order_edit_policy_uses_strict_order_workflow_setting(db_session):
     ApplicationSettingsService(db_session).set_strict_order_workflow_enabled(True)
     db_session.commit()
 
+    UpdateOrderService(db_session).execute(
+        order.id,
+        UpdateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 19),
+            lines=[
+                UpdateOrderLineInput(
+                    product_variant_id=variant.id,
+                    quantity=2,
+                )
+            ],
+        ),
+    )
+
+    assert order.lines[0].quantity == 2
+
+
+def test_strict_order_workflow_allows_ready_deadline_discount_and_notes_only(db_session):
+    order, customer, _variant = create_confirmed_order(db_session)
+    order.status = OrderStatus.READY
+    db_session.flush()
+    ApplicationSettingsService(db_session).set_strict_order_workflow_enabled(True)
+    db_session.commit()
+
+    UpdateOrderService(db_session).execute(
+        order.id,
+        update_input_for_order(
+            order,
+            customer,
+            deadline=date(2026, 4, 25),
+            discount_type=DiscountType.FIXED,
+            discount_value=Decimal("5.00"),
+            notes="Ready note",
+        ),
+    )
+
+    assert order.deadline == date(2026, 4, 25)
+    assert order.discount_amount == Decimal("5.00")
+    assert order.notes == "Ready note"
+
+    with pytest.raises(ValueError, match="Ready orders cannot change order lines."):
+        UpdateOrderService(db_session).execute(
+            order.id,
+            update_input_for_order(order, customer, quantity=2),
+        )
+
+
+def test_strict_order_workflow_allows_completed_notes_only(db_session):
+    order, customer, _variant = create_confirmed_order(db_session)
+    order.status = OrderStatus.COMPLETED
+    db_session.flush()
+    ApplicationSettingsService(db_session).set_strict_order_workflow_enabled(True)
+    db_session.commit()
+
+    UpdateOrderService(db_session).execute(
+        order.id,
+        update_input_for_order(order, customer, notes="Completion note"),
+    )
+
+    assert order.notes == "Completion note"
+
     with pytest.raises(
         ValueError,
-        match="Strict order workflow is enabled. Only draft orders can be fully edited.",
+        match="Completed and cancelled orders cannot change deadline.",
     ):
         UpdateOrderService(db_session).execute(
             order.id,
-            UpdateOrderInput(
-                customer_id=customer.id,
-                order_date=date(2026, 4, 19),
-                lines=[
-                    UpdateOrderLineInput(
-                        product_variant_id=variant.id,
-                        quantity=1,
-                    )
-                ],
+            update_input_for_order(order, customer, deadline=date(2026, 4, 26)),
+        )
+
+
+def test_strict_order_workflow_allows_cancelled_notes_only(db_session):
+    order, customer, _variant = create_confirmed_order(db_session)
+    order.status = OrderStatus.CANCELLED
+    db_session.flush()
+    ApplicationSettingsService(db_session).set_strict_order_workflow_enabled(True)
+    db_session.commit()
+
+    UpdateOrderService(db_session).execute(
+        order.id,
+        update_input_for_order(order, customer, notes="Cancelled note"),
+    )
+
+    assert order.notes == "Cancelled note"
+
+    with pytest.raises(
+        ValueError,
+        match="Completed and cancelled orders cannot change discount.",
+    ):
+        UpdateOrderService(db_session).execute(
+            order.id,
+            update_input_for_order(
+                order,
+                customer,
+                discount_type=DiscountType.FIXED,
+                discount_value=Decimal("1.00"),
             ),
         )

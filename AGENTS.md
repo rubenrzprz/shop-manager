@@ -200,8 +200,7 @@ The project currently has these completed vertical slices:
 - Order line editing in the dialog is currently remove-and-readd; inline line editing is deferred.
 - `strict_order_workflow_enabled` defaults to `False`; while disabled, active statuses (`DRAFT`,
   `CONFIRMED`, `IN_PROGRESS`, `READY`) are editable with the same rules.
-- When strict order workflow is later enabled/configurable, non-draft statuses should get
-  status-specific editing rules instead of draft-like behavior.
+- Strict order workflow uses status-specific editing rules instead of draft-like behavior.
 - Application settings should be stored as typed application-level settings backed by a flexible
   key/value table, not as ad hoc UI constants or a generic user-editable key/value grid.
 - The settings UI should expose known typed controls, not a generic user-editable key/value grid.
@@ -210,6 +209,12 @@ The project currently has these completed vertical slices:
   routed through the helper instead of hardcoding final labels directly in widgets.
 - Service validation messages mostly remain final English strings for now. If deeper localization is
   needed, introduce message codes before translating application-layer errors broadly.
+- Status-aware editing rules should be practical rather than forcing unnecessary status churn:
+  `DRAFT`, `CONFIRMED`, and `IN_PROGRESS` allow full edits; `READY` allows deadline, discount,
+  and notes only; `COMPLETED` and `CANCELLED` allow notes only.
+- A future configurable status workflow setting may let clients choose which order statuses they use
+  (for example only draft/confirmed/completed/cancelled), but this affects transitions, UI actions,
+  reporting, and defaults, so keep it separate from status-aware editing.
 - Likely future settings include currency code, default order deadline days, requiring order
   deadlines, default discount type, manual unit price override, cancelled order reopen behavior,
   stock deduction status, allowing negative stock, and default customer type.
@@ -217,8 +222,7 @@ The project currently has these completed vertical slices:
 - Forward-path statuses can be reverted one step for accidental advances, including
   `COMPLETED -> READY`.
 - Active non-completed statuses can transition to `CANCELLED`.
-- `CANCELLED` is terminal for now.
-- Reopening cancelled orders is deferred as an explicit future workflow, likely `CANCELLED -> DRAFT`.
+- `CANCELLED` can be recovered to `DRAFT` as an explicit accidental-cancellation recovery action.
 - A fuller order workspace redesign is a future UI step: group customer/date fields, line table,
   line composer, totals/discount summary, and notes around order review/editing workflows.
 - Stock movements from orders are deferred.
@@ -232,17 +236,14 @@ When asked to propose the next logical step, consider this order:
    - translate any newly added UI strings through the existing helper
    - consider service-layer message codes if application validation errors need full localization
    - consider broader formatting localization for currency/date display
-2. Status-aware order editing rules
-   - decide which fields can change for confirmed/in-progress/ready orders when strict workflow is on
-   - preserve service-calculated totals and validation
-   - consider audit/history needs before stock workflows
-3. Reopen cancelled orders
-   - add explicit `CANCELLED -> DRAFT` workflow if the client needs reconfirmation
-   - do not make cancelled orders generally editable/transitionable without this workflow
-4. Stock movements
+2. Configurable order status workflow
+   - let clients choose which order statuses are enabled if the workflow needs to be simplified
+   - update transitions, advance/revert actions, defaults, and reporting consistently
+   - keep this separate from field-level status-aware editing rules
+3. Stock movements
    - reduce stock when an order reaches the appropriate status
    - do not mix stock behavior into basic order create/list
-5. Shipment workflows
+4. Shipment workflows
    - create/update shipment info for orders
 
 Prefer one small vertical slice per branch.

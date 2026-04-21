@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from dataclasses import dataclass
+from enum import StrEnum
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -29,14 +30,26 @@ SIMPLE_EDITABLE_ORDER_STATUSES = {
     OrderStatus.IN_PROGRESS,
     OrderStatus.READY,
 }
+STRICT_FULL_EDIT_ORDER_STATUSES = {
+    OrderStatus.DRAFT,
+    OrderStatus.CONFIRMED,
+    OrderStatus.IN_PROGRESS,
+}
 ORDER_STATUS_TRANSITIONS = {
     OrderStatus.DRAFT: {OrderStatus.CONFIRMED, OrderStatus.CANCELLED},
     OrderStatus.CONFIRMED: {OrderStatus.DRAFT, OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED},
     OrderStatus.IN_PROGRESS: {OrderStatus.CONFIRMED, OrderStatus.READY, OrderStatus.CANCELLED},
     OrderStatus.READY: {OrderStatus.IN_PROGRESS, OrderStatus.COMPLETED, OrderStatus.CANCELLED},
     OrderStatus.COMPLETED: {OrderStatus.READY},
-    OrderStatus.CANCELLED: set(),
+    OrderStatus.CANCELLED: {OrderStatus.DRAFT},
 }
+
+
+class OrderEditCapability(StrEnum):
+    FULL = "full"
+    READY_LIMITED = "ready_limited"
+    NOTES_ONLY = "notes_only"
+    NONE = "none"
 
 
 class CreateOrderService:
@@ -341,9 +354,6 @@ class UpdateOrderService:
         self._create_service = CreateOrderService(session)
 
     def execute(self, order_id: int, data: UpdateOrderInput) -> Order:
-        self._create_service._validate_order_input(data)
-        discount_value = self._create_service._money(data.discount_value)
-
         order = self._session.get(
             Order,
             order_id,
@@ -352,9 +362,24 @@ class UpdateOrderService:
         if order is None:
             raise ValueError("Order not found.")
 
-        edit_rejection_message = self.full_order_edit_rejection_message(order.status)
-        if edit_rejection_message is not None:
-            raise ValueError(edit_rejection_message)
+        edit_capability = self.order_edit_capability(order.status)
+        if edit_capability == OrderEditCapability.NONE:
+            raise ValueError(self.order_edit_rejection_message(order.status))
+
+        if edit_capability == OrderEditCapability.NOTES_ONLY:
+            self._validate_notes_only_update(order, data)
+            order.notes = data.notes
+            self._session.flush()
+            return order
+
+        self._create_service._validate_order_input(data)
+        discount_value = self._create_service._money(data.discount_value)
+
+        if edit_capability == OrderEditCapability.READY_LIMITED:
+            self._validate_ready_limited_update(order, data)
+            self._apply_ready_limited_update(order, data, discount_value)
+            self._session.flush()
+            return order
 
         customer = self._session.get(Customer, data.customer_id)
         if customer is None:
@@ -417,29 +442,149 @@ class UpdateOrderService:
         return order
 
     @staticmethod
-    def _can_edit_full_order(status: OrderStatus, *, strict_order_workflow_enabled: bool) -> bool:
-        if strict_order_workflow_enabled:
-            return status == OrderStatus.DRAFT
+    def _order_edit_capability(
+        status: OrderStatus, *, strict_order_workflow_enabled: bool
+    ) -> OrderEditCapability:
+        if not strict_order_workflow_enabled:
+            if status in SIMPLE_EDITABLE_ORDER_STATUSES:
+                return OrderEditCapability.FULL
+            if status in {OrderStatus.COMPLETED, OrderStatus.CANCELLED}:
+                return OrderEditCapability.NOTES_ONLY
+            return OrderEditCapability.NONE
 
-        return status in SIMPLE_EDITABLE_ORDER_STATUSES
+        if status in STRICT_FULL_EDIT_ORDER_STATUSES:
+            return OrderEditCapability.FULL
+        if status == OrderStatus.READY:
+            return OrderEditCapability.READY_LIMITED
+        if status in {OrderStatus.COMPLETED, OrderStatus.CANCELLED}:
+            return OrderEditCapability.NOTES_ONLY
+
+        return OrderEditCapability.NONE
+
+    def order_edit_capability(self, status: OrderStatus) -> OrderEditCapability:
+        return self._order_edit_capability(
+            status,
+            strict_order_workflow_enabled=ApplicationSettingsService(
+                self._session
+            ).strict_order_workflow_enabled(),
+        )
 
     def can_edit_full_order(self, status: OrderStatus) -> bool:
-        return self.full_order_edit_rejection_message(status) is None
+        return self.order_edit_capability(status) == OrderEditCapability.FULL
 
-    def full_order_edit_rejection_message(self, status: OrderStatus) -> str | None:
-        strict_order_workflow_enabled = ApplicationSettingsService(
-            self._session
-        ).strict_order_workflow_enabled()
-        if self._can_edit_full_order(
-            status,
-            strict_order_workflow_enabled=strict_order_workflow_enabled,
-        ):
+    def can_edit_order(self, status: OrderStatus) -> bool:
+        return self.order_edit_capability(status) != OrderEditCapability.NONE
+
+    def order_edit_rejection_message(self, status: OrderStatus) -> str | None:
+        if self.can_edit_order(status):
             return None
 
-        if strict_order_workflow_enabled:
-            return "Strict order workflow is enabled. Only draft orders can be fully edited."
+        if not ApplicationSettingsService(self._session).strict_order_workflow_enabled():
+            return "Only active orders can be edited."
 
-        return "Only active orders can be edited."
+        return "This order status cannot be edited."
+
+    def full_order_edit_rejection_message(self, status: OrderStatus) -> str | None:
+        if self.can_edit_full_order(status):
+            return None
+
+        capability = self.order_edit_capability(status)
+        if capability == OrderEditCapability.READY_LIMITED:
+            return "Ready orders only allow deadline, discount, and notes changes."
+        if capability == OrderEditCapability.NOTES_ONLY:
+            return "Completed and cancelled orders only allow notes changes."
+
+        return self.order_edit_rejection_message(status)
+
+    def _apply_ready_limited_update(
+        self,
+        order: Order,
+        data: UpdateOrderInput,
+        discount_value: Decimal,
+    ) -> None:
+        subtotal = self._create_service._money(sum(line.line_total for line in order.lines))
+        self._create_service._validate_discount_bounds(
+            subtotal,
+            data.discount_type,
+            discount_value,
+        )
+        discount_amount = self._create_service._discount_amount(
+            subtotal,
+            data.discount_type,
+            discount_value,
+        )
+        total_amount = self._create_service._money(subtotal - discount_amount)
+        self._create_service._validate_money_upper_bound(
+            discount_amount,
+            "Order discount amount cannot be greater than 99999999.99.",
+        )
+        self._create_service._validate_money_upper_bound(
+            total_amount,
+            "Order total cannot be greater than 99999999.99.",
+        )
+
+        order.deadline = data.deadline
+        order.discount_type = data.discount_type
+        order.discount_value = discount_value
+        order.discount_amount = discount_amount
+        order.subtotal_amount = subtotal
+        order.total_amount = total_amount
+        order.notes = data.notes
+
+    def _validate_ready_limited_update(self, order: Order, data: UpdateOrderInput) -> None:
+        if order.customer_id != data.customer_id:
+            raise ValueError("Ready orders cannot change customer.")
+        if order.order_date != data.order_date:
+            raise ValueError("Ready orders cannot change order date.")
+        if not self._order_lines_match_input(order, data.lines):
+            raise ValueError("Ready orders cannot change order lines.")
+
+    def _validate_notes_only_update(self, order: Order, data: UpdateOrderInput) -> None:
+        if order.customer_id != data.customer_id:
+            raise ValueError("Completed and cancelled orders cannot change customer.")
+        if order.order_date != data.order_date:
+            raise ValueError("Completed and cancelled orders cannot change order date.")
+        if order.deadline != data.deadline:
+            raise ValueError("Completed and cancelled orders cannot change deadline.")
+        if order.discount_type != data.discount_type:
+            raise ValueError("Completed and cancelled orders cannot change discount.")
+        if self._create_service._money(order.discount_value) != self._create_service._money(
+            data.discount_value
+        ):
+            raise ValueError("Completed and cancelled orders cannot change discount.")
+        if not self._order_lines_match_input(order, data.lines):
+            raise ValueError("Completed and cancelled orders cannot change order lines.")
+
+    def _order_lines_match_input(
+        self,
+        order: Order,
+        lines: list[UpdateOrderLineInput],
+    ) -> bool:
+        existing_lines = sorted(order.lines, key=lambda line: line.id)
+        input_lines = sorted(lines, key=lambda line: line.order_line_id or 0)
+        if len(existing_lines) != len(input_lines):
+            return False
+
+        for existing_line, input_line in zip(existing_lines, input_lines, strict=True):
+            if existing_line.id != input_line.order_line_id:
+                return False
+            if existing_line.product_variant_id != input_line.product_variant_id:
+                return False
+            if existing_line.quantity != input_line.quantity:
+                return False
+            input_unit_price = (
+                input_line.unit_price
+                if input_line.unit_price is not None
+                else existing_line.unit_price
+            )
+            if self._create_service._money(existing_line.unit_price) != self._create_service._money(
+                input_unit_price
+            ):
+                return False
+            if existing_line.notes != input_line.notes:
+                return False
+
+        return True
 
     def _prepare_order_lines(
         self,
