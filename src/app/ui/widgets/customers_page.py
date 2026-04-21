@@ -37,7 +37,7 @@ class CustomersPage(QWidget):
         self._refresh_button.clicked.connect(self.load_customers)
 
         self._table = QTableWidget()
-        self._table.setColumnCount(9)
+        self._table.setColumnCount(8)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -46,14 +46,13 @@ class CustomersPage(QWidget):
 
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
         header.setSectionResizeMode(3, QHeaderView.Stretch)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(6, QHeaderView.Stretch)
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
 
         layout = QVBoxLayout()
         layout.addWidget(self._title_label)
@@ -79,7 +78,6 @@ class CustomersPage(QWidget):
         self._refresh_button.setText(t("Refresh"))
         self._table.setHorizontalHeaderLabels(
             [
-                t("ID"),
                 t("Type"),
                 t("Name"),
                 t("Company"),
@@ -143,7 +141,6 @@ class CustomersPage(QWidget):
             status_text = t("Active") if customer.is_active else t("Inactive")
             customer_type_text = t(customer.customer_type.value.title())
             items = [
-                QTableWidgetItem(str(customer.id)),
                 QTableWidgetItem(customer_type_text),
                 QTableWidgetItem(customer.name),
                 QTableWidgetItem(customer.company_name or ""),
@@ -160,6 +157,8 @@ class CustomersPage(QWidget):
                     item.setForeground(QColor("#777777"))
                     item.setBackground(QColor("#f2f2f2"))
 
+            items[0].setData(Qt.UserRole, customer.id)
+
             for column, item in enumerate(items):
                 self._table.setItem(row, column, item)
 
@@ -175,4 +174,4 @@ class CustomersPage(QWidget):
         if id_item is None:
             return None
 
-        return int(id_item.text())
+        return id_item.data(Qt.UserRole)

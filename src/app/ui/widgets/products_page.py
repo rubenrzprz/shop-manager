@@ -24,6 +24,7 @@ from app.ui.dialog_helpers import question
 from app.ui.dialogs.product_activation_variants_dialog import ProductActivationVariantsDialog
 from app.ui.dialogs.product_dialog import ProductDialog
 from app.ui.localization import t
+from app.ui.widgets.category_summary_widget import CategorySummaryWidget, category_summary
 
 
 class ProductsPage(QWidget):
@@ -57,7 +58,7 @@ class ProductsPage(QWidget):
         self._table.setAlternatingRowColors(True)
 
         header = self._table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
@@ -93,8 +94,8 @@ class ProductsPage(QWidget):
         self._refresh_button.setText(t("Refresh"))
         self._table.setHorizontalHeaderLabels(
             [
-                t("ID"),
                 t("Name"),
+                t("Categories"),
                 t("Supplier"),
                 t("Base Price"),
                 t("Track Stock"),
@@ -259,19 +260,28 @@ class ProductsPage(QWidget):
 
         return ", ".join(summaries)
 
+    def _build_category_summary(self, product: ProductListItem) -> str:
+        return self._category_summary(self._product_category_names(product))
+
+    @staticmethod
+    def _category_summary(category_names: list[str]) -> str:
+        return category_summary(category_names)
+
     def _populate_table(self, products: list[ProductListItem]) -> None:
         self._table.setRowCount(len(products))
 
         for row, product in enumerate(products):
             base_price_text = "" if product.base_price is None else str(product.base_price)
             supplier_text = product.supplier_name or ""
+            category_names = self._product_category_names(product)
+            categories_text = "" if category_names else self._category_summary(category_names)
             track_stock_text = t("Yes") if product.track_stock else t("No")
             status_text = t("Active") if product.is_active else t("Inactive")
             variant_summary_text = self._build_variant_summary(product)
 
             items = [
-                QTableWidgetItem(str(product.id)),
                 QTableWidgetItem(product.name),
+                QTableWidgetItem(categories_text),
                 QTableWidgetItem(supplier_text),
                 QTableWidgetItem(base_price_text),
                 QTableWidgetItem(track_stock_text),
@@ -285,10 +295,14 @@ class ProductsPage(QWidget):
                     item.setForeground(QColor("#777777"))
                     item.setBackground(QColor("#f2f2f2"))
 
+            items[0].setData(Qt.UserRole, product.id)
             items[5].setData(Qt.UserRole, product.is_active)
 
             for column, item in enumerate(items):
                 self._table.setItem(row, column, item)
+
+            if category_names:
+                self._table.setCellWidget(row, 1, CategorySummaryWidget(category_names, self._table))
 
     def _refresh_table_text(self) -> None:
         if self._table.rowCount() > 0:
@@ -306,7 +320,7 @@ class ProductsPage(QWidget):
         if id_item is None:
             return None
 
-        return int(id_item.text())
+        return id_item.data(Qt.UserRole)
 
     def _selected_product_is_active(self) -> bool:
         selected_items = self._table.selectedItems()
@@ -321,3 +335,7 @@ class ProductsPage(QWidget):
             return False
 
         return bool(status_item.data(Qt.UserRole))
+
+    @staticmethod
+    def _product_category_names(product: ProductListItem) -> list[str]:
+        return [category.name for category in product.categories]
