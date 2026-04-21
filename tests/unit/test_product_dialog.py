@@ -1,5 +1,7 @@
 import pytest
 
+import app.ui.dialogs.product_dialog as product_dialog_module
+from app.application.dto.products import CreateProductVariantInput
 from app.application.dto.suppliers import SupplierPickerItem
 from app.ui.dialogs.product_dialog import ProductDialog
 from app.ui.dialogs.supplier_picker_dialog import SupplierPickerDialog
@@ -33,3 +35,117 @@ def test_supplier_picker_matches_name_tax_id_phone_and_email():
     assert SupplierPickerDialog._matches_supplier(supplier, "600000000")
     assert SupplierPickerDialog._matches_supplier(supplier, "example.com")
     assert not SupplierPickerDialog._matches_supplier(supplier, "la orotava")
+
+
+def test_add_variant_to_existing_product_stays_pending(monkeypatch):
+    dialog = ProductDialog.__new__(ProductDialog)
+    dialog._product_id = 10
+    dialog._variant_drafts = []
+    table_refreshed = False
+
+    class FakeVariantDialog:
+        variant_input = CreateProductVariantInput(variant_name="Blue", size="M")
+
+        def __init__(self, parent):
+            self.parent = parent
+
+        def exec(self):
+            return True
+
+    def fail_session():
+        raise AssertionError("variant actions must not open a session before Save")
+
+    def refresh_table():
+        nonlocal table_refreshed
+        table_refreshed = True
+
+    monkeypatch.setattr(product_dialog_module, "ProductVariantDialog", FakeVariantDialog)
+    monkeypatch.setattr(product_dialog_module, "SessionLocal", fail_session)
+    dialog._populate_saved_variants_table = refresh_table
+
+    ProductDialog._add_variant(dialog)
+
+    assert table_refreshed
+    assert len(dialog._variant_drafts) == 1
+    assert dialog._variant_drafts[0].id is None
+    assert dialog._variant_drafts[0].variant_name == "Blue"
+    assert dialog._variant_drafts[0].size == "M"
+
+
+def test_pending_variant_changes_are_applied_on_save(monkeypatch):
+    calls = []
+    session = object()
+    dialog = ProductDialog.__new__(ProductDialog)
+    dialog._product_id = 10
+    dialog._variant_drafts = [
+        product_dialog_module._VariantDraft(
+            id=1,
+            sku="TSHIRT-10-1",
+            size="M",
+            color="Red",
+            variant_name="Red / M",
+            description=None,
+            price_override=None,
+            stock_current=3,
+            stock_minimum=1,
+            is_active=False,
+            original_is_active=True,
+        ),
+        product_dialog_module._VariantDraft(
+            id=None,
+            sku=None,
+            size="L",
+            color="Blue",
+            variant_name="Blue / L",
+            description=None,
+            price_override=None,
+            stock_current=None,
+            stock_minimum=None,
+            is_active=True,
+        ),
+    ]
+
+    class FakeCreateProductVariantService:
+        def __init__(self, service_session):
+            assert service_session is session
+
+        def execute(self, product_id, data):
+            calls.append(("create", product_id, data.variant_name, data.is_active))
+
+    class FakeUpdateProductVariantService:
+        def __init__(self, service_session):
+            assert service_session is session
+
+        def execute(self, variant_id, data):
+            calls.append(("update", variant_id, data.variant_name, data.stock_current))
+
+    class FakeProductVariantStatusService:
+        def __init__(self, service_session):
+            assert service_session is session
+
+        def execute(self, variant_id, is_active):
+            calls.append(("status", variant_id, is_active))
+
+    monkeypatch.setattr(
+        product_dialog_module,
+        "CreateProductVariantService",
+        FakeCreateProductVariantService,
+    )
+    monkeypatch.setattr(
+        product_dialog_module,
+        "UpdateProductVariantService",
+        FakeUpdateProductVariantService,
+    )
+    monkeypatch.setattr(
+        product_dialog_module,
+        "ProductVariantStatusService",
+        FakeProductVariantStatusService,
+    )
+
+    ProductDialog._apply_pending_variant_changes(dialog, session)
+
+    assert calls == [
+        ("update", 1, "Red / M", 3),
+        ("status", 1, False),
+        ("create", 10, "Blue / L", True),
+    ]

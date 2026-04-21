@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from PySide6.QtCore import Qt
@@ -43,6 +44,21 @@ from app.ui.dialogs.supplier_picker_dialog import SupplierPickerDialog
 from app.ui.localization import t
 
 
+@dataclass
+class _VariantDraft:
+    id: int | None
+    sku: str | None
+    size: str | None
+    color: str | None
+    variant_name: str | None
+    description: str | None
+    price_override: Decimal | None
+    stock_current: int | None
+    stock_minimum: int | None
+    is_active: bool
+    original_is_active: bool | None = None
+
+
 class ProductDialog(QDialog):
     def __init__(self, parent=None, product_id: int | None = None) -> None:
         super().__init__(parent)
@@ -52,6 +68,7 @@ class ProductDialog(QDialog):
         self._selected_supplier_id: int | None = None
         self._selected_supplier_name: str | None = None
         self._create_variants: list[CreateProductVariantInput] = []
+        self._variant_drafts: list[_VariantDraft] = []
 
         self.setWindowTitle(
             t("Edit Product") if self._product_id is not None else t("Create Product")
@@ -188,7 +205,23 @@ class ProductDialog(QDialog):
             "" if product.base_price is None else str(product.base_price)
         )
         self._track_stock_checkbox.setChecked(product.track_stock)
-        self._populate_saved_variants_table(product.variants)
+        self._variant_drafts = [
+            _VariantDraft(
+                id=variant.id,
+                sku=variant.sku,
+                size=variant.size,
+                color=variant.color,
+                variant_name=variant.variant_name,
+                description=variant.description,
+                price_override=variant.price_override,
+                stock_current=variant.stock_current,
+                stock_minimum=variant.stock_minimum,
+                is_active=variant.is_active,
+                original_is_active=variant.is_active,
+            )
+            for variant in product.variants
+        ]
+        self._populate_saved_variants_table()
 
     def _open_supplier_picker(self) -> None:
         dialog = SupplierPickerDialog(self)
@@ -251,6 +284,7 @@ class ProductDialog(QDialog):
                         track_stock=track_stock,
                     ),
                 )
+                self._apply_pending_variant_changes(session)
 
             session.commit()
             self.accept()
@@ -279,10 +313,10 @@ class ProductDialog(QDialog):
         ]
         self._populate_variants_table(rows)
 
-    def _populate_saved_variants_table(self, variants: list[ProductVariantEditItem]) -> None:
+    def _populate_saved_variants_table(self) -> None:
         rows = [
             {
-                "sku": variant.sku,
+                "sku": variant.sku or "",
                 "variant": variant.variant_name or "",
                 "size": variant.size or "",
                 "color": variant.color or "",
@@ -290,9 +324,9 @@ class ProductDialog(QDialog):
                 "price_override": variant.price_override is not None,
                 "status": t("Active") if variant.is_active else t("Inactive"),
                 "default": index == 0,
-                "data": variant.id,
+                "data": index,
             }
-            for index, variant in enumerate(variants)
+            for index, variant in enumerate(self._variant_drafts)
         ]
         self._populate_variants_table(rows)
 
@@ -345,29 +379,16 @@ class ProductDialog(QDialog):
             self._populate_create_variants_table()
             return
 
-        try:
-            session = SessionLocal()
-        except Exception as exc:
-            QMessageBox.critical(self, t("Could not create product variant"), str(exc))
-            return
-
-        try:
-            CreateProductVariantService(session).execute(self._product_id, dialog.variant_input)
-            session.commit()
-            self._load_product()
-        except Exception as exc:
-            session.rollback()
-            QMessageBox.critical(self, t("Could not create product variant"), t(str(exc)))
-        finally:
-            session.close()
+        self._variant_drafts.append(self._draft_from_create_input(dialog.variant_input))
+        self._populate_saved_variants_table()
 
     def _edit_selected_variant(self) -> None:
         if self._product_id is None:
             self._edit_selected_create_variant()
             return
 
-        variant = self._selected_saved_variant()
-        if variant is None:
+        variant_index = self._selected_saved_variant_index()
+        if variant_index is None:
             QMessageBox.information(
                 self,
                 t("No product variant selected"),
@@ -375,25 +396,27 @@ class ProductDialog(QDialog):
             )
             return
 
-        dialog = ProductVariantDialog(self, variant=variant)
+        variant = self._variant_drafts[variant_index]
+        if variant.id is None:
+            dialog = ProductVariantDialog(self, create_variant=self._create_input_from_draft(variant))
+            if not dialog.exec() or not isinstance(dialog.variant_input, CreateProductVariantInput):
+                return
+
+            self._variant_drafts[variant_index] = self._draft_from_create_input(
+                dialog.variant_input
+            )
+            self._populate_saved_variants_table()
+            return
+
+        dialog = ProductVariantDialog(self, variant=self._edit_item_from_draft(variant))
         if not dialog.exec() or not isinstance(dialog.variant_input, UpdateProductVariantInput):
             return
 
-        try:
-            session = SessionLocal()
-        except Exception as exc:
-            QMessageBox.critical(self, t("Could not update product variant"), str(exc))
-            return
-
-        try:
-            UpdateProductVariantService(session).execute(variant.id, dialog.variant_input)
-            session.commit()
-            self._load_product()
-        except Exception as exc:
-            session.rollback()
-            QMessageBox.critical(self, t("Could not update product variant"), t(str(exc)))
-        finally:
-            session.close()
+        self._variant_drafts[variant_index] = self._draft_from_update_input(
+            variant,
+            dialog.variant_input,
+        )
+        self._populate_saved_variants_table()
 
     def _edit_selected_create_variant(self) -> None:
         index = self._selected_create_variant_index()
@@ -417,7 +440,16 @@ class ProductDialog(QDialog):
             self._change_create_variant_status(is_active)
             return
 
-        variant = self._selected_saved_variant()
+        variant_index = self._selected_saved_variant_index()
+        if variant_index is None:
+            QMessageBox.information(
+                self,
+                t("No product variant selected"),
+                t("Select a product variant."),
+            )
+            return
+
+        variant = self._variant_drafts[variant_index]
         if variant is None:
             QMessageBox.information(
                 self,
@@ -435,21 +467,8 @@ class ProductDialog(QDialog):
             if response != QMessageBox.Yes:
                 return
 
-        try:
-            session = SessionLocal()
-        except Exception as exc:
-            QMessageBox.critical(self, t("Could not update product variant"), str(exc))
-            return
-
-        try:
-            ProductVariantStatusService(session).execute(variant.id, is_active)
-            session.commit()
-            self._load_product()
-        except Exception as exc:
-            session.rollback()
-            QMessageBox.critical(self, t("Could not update product variant"), t(str(exc)))
-        finally:
-            session.close()
+        variant.is_active = is_active
+        self._populate_saved_variants_table()
 
     def _change_create_variant_status(self, is_active: bool) -> None:
         index = self._selected_create_variant_index()
@@ -484,20 +503,12 @@ class ProductDialog(QDialog):
         )
         self._populate_create_variants_table()
 
-    def _selected_saved_variant(self) -> ProductVariantEditItem | None:
-        if self._product is None:
-            return None
-
+    def _selected_saved_variant_index(self) -> int | None:
         selected_items = self._variants_table.selectedItems()
         if not selected_items:
             return None
 
-        variant_id = selected_items[0].data(Qt.UserRole)
-        for variant in self._product.variants:
-            if variant.id == variant_id:
-                return variant
-
-        return None
+        return selected_items[0].data(Qt.UserRole)
 
     def _selected_create_variant_index(self) -> int | None:
         selected_items = self._variants_table.selectedItems()
@@ -512,12 +523,109 @@ class ProductDialog(QDialog):
         ]
         return active_indexes == [selected_index]
 
-    def _deactivates_last_active_variant(self, selected_variant: ProductVariantEditItem) -> bool:
-        if self._product is None or not selected_variant.is_active:
+    def _deactivates_last_active_variant(self, selected_variant: _VariantDraft) -> bool:
+        if not selected_variant.is_active:
             return False
 
-        active_variants = [variant for variant in self._product.variants if variant.is_active]
-        return len(active_variants) == 1 and active_variants[0].id == selected_variant.id
+        active_variants = [variant for variant in self._variant_drafts if variant.is_active]
+        return len(active_variants) == 1 and active_variants[0] is selected_variant
+
+    def _apply_pending_variant_changes(self, session) -> None:
+        if self._product_id is None:
+            return
+
+        for variant in self._variant_drafts:
+            if variant.id is None:
+                CreateProductVariantService(session).execute(
+                    self._product_id,
+                    self._create_input_from_draft(variant),
+                )
+                continue
+
+            UpdateProductVariantService(session).execute(
+                variant.id,
+                UpdateProductVariantInput(
+                    variant_id=variant.id,
+                    size=variant.size,
+                    color=variant.color,
+                    variant_name=variant.variant_name,
+                    description=variant.description,
+                    price_override=variant.price_override,
+                    stock_current=variant.stock_current,
+                    stock_minimum=variant.stock_minimum,
+                ),
+            )
+            if (
+                variant.original_is_active is not None
+                and variant.is_active != variant.original_is_active
+            ):
+                ProductVariantStatusService(session).execute(variant.id, variant.is_active)
+
+    @staticmethod
+    def _draft_from_create_input(data: CreateProductVariantInput) -> _VariantDraft:
+        return _VariantDraft(
+            id=None,
+            sku=data.sku,
+            size=data.size,
+            color=data.color,
+            variant_name=data.variant_name,
+            description=data.description,
+            price_override=data.price_override,
+            stock_current=data.stock_current,
+            stock_minimum=data.stock_minimum,
+            is_active=data.is_active,
+        )
+
+    @staticmethod
+    def _draft_from_update_input(
+        draft: _VariantDraft,
+        data: UpdateProductVariantInput,
+    ) -> _VariantDraft:
+        return _VariantDraft(
+            id=draft.id,
+            sku=draft.sku,
+            size=data.size,
+            color=data.color,
+            variant_name=data.variant_name,
+            description=data.description,
+            price_override=data.price_override,
+            stock_current=data.stock_current,
+            stock_minimum=data.stock_minimum,
+            is_active=draft.is_active,
+            original_is_active=draft.original_is_active,
+        )
+
+    @staticmethod
+    def _create_input_from_draft(draft: _VariantDraft) -> CreateProductVariantInput:
+        return CreateProductVariantInput(
+            sku=draft.sku,
+            size=draft.size,
+            color=draft.color,
+            variant_name=draft.variant_name,
+            description=draft.description,
+            price_override=draft.price_override,
+            stock_current=draft.stock_current,
+            stock_minimum=draft.stock_minimum,
+            is_active=draft.is_active,
+        )
+
+    @staticmethod
+    def _edit_item_from_draft(draft: _VariantDraft) -> ProductVariantEditItem:
+        if draft.id is None:
+            raise ValueError("Product variant was not saved.")
+
+        return ProductVariantEditItem(
+            id=draft.id,
+            sku=draft.sku or "",
+            size=draft.size,
+            color=draft.color,
+            variant_name=draft.variant_name,
+            description=draft.description,
+            price_override=draft.price_override,
+            stock_current=draft.stock_current,
+            stock_minimum=draft.stock_minimum,
+            is_active=draft.is_active,
+        )
 
     @staticmethod
     def _parse_decimal(raw_value: str, field_label: str = "Base price") -> Decimal | None:
