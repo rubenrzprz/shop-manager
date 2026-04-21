@@ -35,7 +35,7 @@ class CreateProductService:
             description=data.description,
             base_price=data.base_price,
             track_stock=data.track_stock,
-            is_active=data.is_active,
+            is_active=data.is_active and any(variant.is_active for variant in data.variants),
         )
 
         self._session.add(product)
@@ -186,6 +186,7 @@ class CreateProductService:
         if value < Decimal("0"):
             raise ValueError(negative_message)
 
+
 class ListProductsService:
     def __init__(self, session: Session) -> None:
         self._session = session
@@ -214,6 +215,8 @@ class ListProductsService:
                     variant_name=variant.variant_name,
                     description=variant.description,
                     price_override=variant.price_override,
+                    stock_current=variant.stock_current,
+                    stock_minimum=variant.stock_minimum,
                     is_active=variant.is_active,
                 )
                 for variant in sorted(product.variants, key=lambda v: v.id)
@@ -275,9 +278,11 @@ class ListProductVariantPickerOptionsService:
                 size=variant.size,
                 color=variant.color,
                 variant_name=variant.variant_name,
-                price=variant.price_override
-                if variant.price_override is not None
-                else variant.product.base_price,
+                price=(
+                    variant.price_override
+                    if variant.price_override is not None
+                    else variant.product.base_price
+                ),
                 product_is_active=variant.product.is_active,
                 variant_is_active=variant.is_active,
             )
@@ -303,6 +308,21 @@ class GetProductForEditService:
             raise ValueError("Product not found.")
 
         default_variant = self._default_variant(product)
+        variants = [
+            ProductVariantEditItem(
+                id=variant.id,
+                sku=variant.sku,
+                size=variant.size,
+                color=variant.color,
+                variant_name=variant.variant_name,
+                description=variant.description,
+                price_override=variant.price_override,
+                stock_current=variant.stock_current,
+                stock_minimum=variant.stock_minimum,
+                is_active=variant.is_active,
+            )
+            for variant in sorted(product.variants, key=lambda item: item.id)
+        ]
 
         return ProductEditItem(
             id=product.id,
@@ -321,8 +341,11 @@ class GetProductForEditService:
                 variant_name=default_variant.variant_name,
                 description=default_variant.description,
                 price_override=default_variant.price_override,
+                stock_current=default_variant.stock_current,
+                stock_minimum=default_variant.stock_minimum,
                 is_active=default_variant.is_active,
             ),
+            variants=variants,
         )
 
     @staticmethod
@@ -384,6 +407,12 @@ class UpdateProductService:
             if data.default_variant.price_override is not UNSET:
                 variant.price_override = data.default_variant.price_override
 
+            if data.default_variant.stock_current is not UNSET:
+                variant.stock_current = data.default_variant.stock_current
+
+            if data.default_variant.stock_minimum is not UNSET:
+                variant.stock_minimum = data.default_variant.stock_minimum
+
         self._session.flush()
 
         return product
@@ -410,6 +439,14 @@ class UpdateProductService:
                 "Default variant price override cannot be negative.",
             )
 
+        if variant.stock_current is not UNSET and variant.stock_current is not None:
+            if variant.stock_current < 0:
+                raise ValueError("Default variant stock_current cannot be negative.")
+
+        if variant.stock_minimum is not UNSET and variant.stock_minimum is not None:
+            if variant.stock_minimum < 0:
+                raise ValueError("Default variant stock_minimum cannot be negative.")
+
     @staticmethod
     def _find_product_variant(product: Product, variant_id: int) -> ProductVariant:
         for variant in product.variants:
@@ -423,8 +460,17 @@ class ProductStatusService:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def execute(self, product_id: int, is_active: bool) -> Product:
-        product = self._session.get(Product, product_id)
+    def execute(
+        self,
+        product_id: int,
+        is_active: bool,
+        active_variant_ids: list[int] | tuple[int, ...] | None = None,
+    ) -> Product:
+        product = self._session.get(
+            Product,
+            product_id,
+            options=[selectinload(Product.variants)],
+        )
 
         if product is None:
             raise ValueError("Product not found.")
@@ -433,7 +479,165 @@ class ProductStatusService:
             status = "active" if is_active else "inactive"
             raise ValueError(f"Product is already {status}.")
 
+        if is_active:
+            if active_variant_ids is not None:
+                self._activate_selected_variants(product, active_variant_ids)
+            if not any(variant.is_active for variant in product.variants):
+                raise ValueError("Product must have at least one active variant to be active.")
+
         product.is_active = is_active
+        if not is_active:
+            for variant in product.variants:
+                variant.is_active = False
         self._session.flush()
 
         return product
+
+    @staticmethod
+    def _activate_selected_variants(
+        product: Product,
+        active_variant_ids: list[int] | tuple[int, ...],
+    ) -> None:
+        selected_variant_ids = set(active_variant_ids)
+        product_variant_ids = {variant.id for variant in product.variants}
+        if not selected_variant_ids:
+            raise ValueError("Select at least one product variant to activate.")
+        if not selected_variant_ids <= product_variant_ids:
+            raise ValueError("Product variant not found.")
+
+        for variant in product.variants:
+            variant.is_active = variant.id in selected_variant_ids
+
+
+class CreateProductVariantService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, product_id: int, data: CreateProductVariantInput) -> ProductVariant:
+        product = self._session.get(
+            Product,
+            product_id,
+            options=[selectinload(Product.variants)],
+        )
+
+        if product is None:
+            raise ValueError("Product not found.")
+
+        variant_index = len(product.variants) + 1
+        create_service = CreateProductService(self._session)
+        create_service._validate_variant_input(data, variant_index)
+
+        sku = create_service._normalize_sku(data.sku) or create_service._generate_sku(
+            product.name,
+            product.id,
+            variant_index,
+        )
+        self._validate_unique_sku(sku)
+
+        variant = ProductVariant(
+            product_id=product.id,
+            sku=sku,
+            size=data.size,
+            color=data.color,
+            variant_name=data.variant_name,
+            description=data.description,
+            price_override=data.price_override,
+            stock_current=data.stock_current,
+            stock_minimum=data.stock_minimum,
+            is_active=data.is_active,
+        )
+
+        self._session.add(variant)
+        self._session.flush()
+
+        return variant
+
+    def _validate_unique_sku(self, sku: str) -> None:
+        existing_variant = self._session.scalar(
+            select(ProductVariant).where(ProductVariant.sku == sku)
+        )
+        if existing_variant is not None:
+            raise ValueError("Product variant SKU already exists.")
+
+
+class UpdateProductVariantService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, variant_id: int, data: UpdateProductVariantInput) -> ProductVariant:
+        self._validate_variant_input(data, "Product variant")
+
+        variant = self._session.get(ProductVariant, variant_id)
+
+        if variant is None:
+            raise ValueError("Product variant not found.")
+
+        if data.size is not UNSET:
+            variant.size = data.size
+
+        if data.color is not UNSET:
+            variant.color = data.color
+
+        if data.variant_name is not UNSET:
+            variant.variant_name = data.variant_name
+
+        if data.description is not UNSET:
+            variant.description = data.description
+
+        if data.price_override is not UNSET:
+            variant.price_override = data.price_override
+
+        if data.stock_current is not UNSET:
+            variant.stock_current = data.stock_current
+
+        if data.stock_minimum is not UNSET:
+            variant.stock_minimum = data.stock_minimum
+
+        self._session.flush()
+
+        return variant
+
+    @staticmethod
+    def _validate_variant_input(data: UpdateProductVariantInput, label: str) -> None:
+        if data.price_override is not UNSET:
+            CreateProductService._validate_decimal_amount(
+                data.price_override,
+                f"{label} price override must be a finite number.",
+                f"{label} price override cannot be negative.",
+            )
+
+        if data.stock_current is not UNSET and data.stock_current is not None:
+            if data.stock_current < 0:
+                raise ValueError(f"{label} stock_current cannot be negative.")
+
+        if data.stock_minimum is not UNSET and data.stock_minimum is not None:
+            if data.stock_minimum < 0:
+                raise ValueError(f"{label} stock_minimum cannot be negative.")
+
+
+class ProductVariantStatusService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, variant_id: int, is_active: bool) -> ProductVariant:
+        variant = self._session.get(
+            ProductVariant,
+            variant_id,
+            options=[joinedload(ProductVariant.product).selectinload(Product.variants)],
+        )
+
+        if variant is None:
+            raise ValueError("Product variant not found.")
+
+        if variant.is_active == is_active:
+            status = "active" if is_active else "inactive"
+            raise ValueError(f"Product variant is already {status}.")
+
+        variant.is_active = is_active
+
+        if not is_active and not any(item.is_active for item in variant.product.variants):
+            variant.product.is_active = False
+
+        self._session.flush()
+
+        return variant

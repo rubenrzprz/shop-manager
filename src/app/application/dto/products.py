@@ -22,6 +22,7 @@ class CreateProductVariantInput:
     stock_minimum: int | None = None
     is_active: bool = True
 
+
 @dataclass(frozen=True)
 class CreateProductInput:
     name: str
@@ -32,6 +33,7 @@ class CreateProductInput:
     is_active: bool = True
     variants: list[CreateProductVariantInput] = field(default_factory=list)
 
+
 @dataclass(frozen=True)
 class UpdateProductVariantInput:
     variant_id: int
@@ -40,6 +42,9 @@ class UpdateProductVariantInput:
     variant_name: str | None | _Unset = UNSET
     description: str | None | _Unset = UNSET
     price_override: Decimal | None | _Unset = UNSET
+    stock_current: int | None | _Unset = UNSET
+    stock_minimum: int | None | _Unset = UNSET
+
 
 @dataclass(frozen=True)
 class UpdateProductInput:
@@ -50,6 +55,7 @@ class UpdateProductInput:
     track_stock: bool | _Unset = UNSET
     default_variant: UpdateProductVariantInput | None = None
 
+
 @dataclass(frozen=True)
 class ProductVariantEditItem:
     id: int
@@ -59,7 +65,10 @@ class ProductVariantEditItem:
     variant_name: str | None
     description: str | None
     price_override: Decimal | None
+    stock_current: int | None
+    stock_minimum: int | None
     is_active: bool
+
 
 @dataclass(frozen=True)
 class ProductEditItem:
@@ -72,11 +81,14 @@ class ProductEditItem:
     track_stock: bool
     is_active: bool
     default_variant: ProductVariantEditItem
+    variants: list[ProductVariantEditItem]
+
 
 @dataclass(frozen=True)
 class SupplierOption:
     id: int
     name: str
+
 
 @dataclass(frozen=True)
 class ProductVariantListItem:
@@ -87,7 +99,10 @@ class ProductVariantListItem:
     variant_name: str | None
     description: str | None
     price_override: Decimal | None
+    stock_current: int | None
+    stock_minimum: int | None
     is_active: bool
+
 
 @dataclass(frozen=True)
 class ProductListItem:
