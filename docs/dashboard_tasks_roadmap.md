@@ -125,24 +125,26 @@ Later options:
 ## Suggested Slice Order
 
 1. Dashboard shell
-   - dashboard as entry point
-   - shortcut section
-   - empty daily task sections
-2. Basic tasks
+   - completed as the entry tab with quick actions and empty daily task sections
+2. Product variant management
+   - add variants to existing products before deepening task work
+   - edit non-default variants
+   - activate/deactivate variants while preserving historical order lines
+3. Basic tasks
    - task table, DTOs, services, tests
    - create/list/complete/reopen one-off tasks
    - dashboard lists overdue, pending, and completed tasks
-3. Task series generation
+4. Task series generation
    - task series table
    - recurrence fields
    - `task_generation_horizon_days`
    - startup generation service
-4. Order-bound tasks
+5. Order-bound tasks
    - optional `order_id`
    - create custom reminders from orders
-5. Default order follow-up reminders
+6. Default order follow-up reminders
    - `default_order_follow_up_days`
    - automatic active-order reminders
-6. Calendar task view
+7. Calendar task view
    - browse days
    - create reminders from selected date
