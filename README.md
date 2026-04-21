@@ -1,49 +1,79 @@
-# Shop Manager
+# Shop Manager 🛍️
 
-Desktop application for store operations focused on product management, order handling, and stock control.
+![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)
+![PySide6](https://img.shields.io/badge/ui-PySide6-41CD52?logo=qt&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![SQLAlchemy](https://img.shields.io/badge/orm-SQLAlchemy-D71F00)
+![pytest](https://img.shields.io/badge/tests-pytest-0A9EDC?logo=pytest&logoColor=white)
+![Ruff](https://img.shields.io/badge/lint-Ruff-D7FF64)
 
-## Local Setup
+Shop Manager is a desktop application for store operations, built incrementally around a clean
+Python architecture. It uses PySide6 for the Windows-friendly UI, PostgreSQL for persistence, and
+application services to keep business logic out of the interface layer.
 
-After cloning the repository, create a virtual environment, install dependencies, configure the database environment, and run the Alembic migrations.
+## What It Does Today ✅
 
-### 1. Create the virtual environment and install dependencies
+- 📦 Products: create, list, edit core fields/default variant, activate/deactivate
+- 🤝 Suppliers: create, list, edit
+- 👥 Customers: create, list, edit
+- 🧾 Orders: create, edit, calculate totals, apply discounts, validate deadlines
+- 🔁 Order workflows: configurable statuses, advance/revert/cancel/recover actions
+- ⚙️ Settings: typed application settings backed by the database
+- 🌐 Localization: English and Spanish UI labels/messages
 
-This project requires Python 3.12 or newer.
+## What Is Coming 🧭
+
+- 🏠 Dashboard entry point with shortcuts and daily reminders
+- ✅ Standalone tasks and order-linked reminders
+- 🔁 Recurring task generation through a configurable planning horizon
+- 📅 Calendar-based task planning
+- 📦 Stock movements
+- 🚚 Shipment workflows
+
+## Tech Stack 🧰
+
+| Area | Tooling |
+| --- | --- |
+| Language | Python 3.12+ |
+| Desktop UI | PySide6 |
+| Database | PostgreSQL |
+| ORM | SQLAlchemy |
+| Migrations | Alembic |
+| Tests | pytest, Testcontainers |
+| Quality | Ruff, Black, compile checks |
+| CI | GitHub Actions |
+
+## Quick Start 🚀
+
+### 1. Create The Virtual Environment
+
+Linux/macOS:
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e .
-```
-
-If you also want test dependencies:
-
-```bash
-python -m pip install -e ".[test]"
-```
-
-If you want formatter and linter tools:
-
-```bash
-python -m pip install -e ".[dev]"
-```
-
-If you want both test and development dependencies:
-
-```bash
 python -m pip install -e ".[test,dev]"
 ```
 
-### 2. Configure `.env`
+Windows PowerShell:
 
-Copy the example file:
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[test,dev]"
+```
+
+### 2. Configure Environment
+
+Copy the example environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-Default example:
+Default values:
 
 ```env
 APP_ENV=development
@@ -57,62 +87,97 @@ POSTGRES_PORT=5432
 DATABASE_URL=postgresql+psycopg://shop_user:shop_pass@localhost:5432/shop_manager
 ```
 
-If you already have an existing PostgreSQL database with different credentials, update both the `POSTGRES_*` values and `DATABASE_URL` so they match the real database.
+If you already have a PostgreSQL database with different credentials, update both the `POSTGRES_*`
+values and `DATABASE_URL` so they match.
 
-### 3. Start PostgreSQL with Docker Compose
+### 3. Start PostgreSQL
 
 ```bash
 docker compose up -d
 ```
 
-### 4. Upgrade Alembic
+### 4. Run Migrations
 
-Run the database migrations before starting the application:
+Linux/macOS:
 
 ```bash
 alembic upgrade head
 ```
 
-If you are not activating the virtual environment, you can run:
+Windows PowerShell:
 
-```bash
-./.venv/bin/alembic upgrade head
+```powershell
+.\.venv\Scripts\alembic.exe upgrade head
 ```
 
-### 5. Run the application
+### 5. Run The Application
+
+Linux/macOS:
 
 ```bash
 python src/app/main.py
 ```
 
-## Goal
+Windows PowerShell:
 
-Build a Windows desktop application with a clear separation between UI, business logic, and data persistence, designed to scale from an initial local setup to a multi-workstation environment.
+```powershell
+.\.venv\Scripts\python.exe src\app\main.py
+```
 
-## Initial Scope
+## Development Checks 🧪
 
-- Product management
-- Order management
-- Basic stock tracking
+Run these before pushing meaningful changes:
 
-## Planned Stack
+```bash
+python -m ruff check src tests migrations
+python -m compileall -q src tests
+python -m pytest -q
+```
 
-- Python
-- PySide6
-- PostgreSQL
-- SQLAlchemy
-- Alembic
-- pytest
+Integration tests use PostgreSQL/Testcontainers when relevant, so Docker may be required.
 
-## Project Structure
+## Architecture 🏗️
 
+Shop Manager follows a layered structure:
+
+```text
 src/app/
-  config/          # settings and environment config
-  domain/          # business entities and core rules
-  application/     # use cases and application services
-  infrastructure/  # database, repositories, external integrations
-  ui/              # desktop interface
+  config/          settings and environment config
+  domain/          framework-independent domain concepts and enums
+  application/     DTOs, services, use cases, validation
+  infrastructure/  database models, sessions, integrations
+  ui/              PySide6 widgets, dialogs, windows
+```
 
-## Current Status
+Core rule: UI code stays thin. Business behavior and validation belong in application services;
+SQLAlchemy models stay behind service boundaries.
 
-Initial repository setup in progress.
+## Roadmap 🗺️
+
+Near-term implementation path:
+
+1. Dashboard shell
+   - make the dashboard the entry point
+   - add shortcuts to core app areas
+   - add pending/completed daily task sections
+2. Basic tasks
+   - create standalone reminders
+   - list tasks due today
+   - complete and reopen tasks
+3. Recurring task generation
+   - store task series separately from generated task occurrences
+   - generate missing occurrences through a configurable planning horizon
+4. Order follow-up reminders
+   - add configurable default order follow-up days
+   - generate reminders for active orders that need review
+5. Calendar view
+   - browse tasks by date
+   - create reminders directly for selected days
+6. Stock and shipment workflows
+
+See [docs/dashboard_tasks_roadmap.md](docs/dashboard_tasks_roadmap.md) for the dashboard and
+reminder design.
+
+## Author 👤
+
+Built by [Rubén Ruiz Pérez](https://github.com/rubenrzprz).
