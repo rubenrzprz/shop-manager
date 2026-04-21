@@ -54,6 +54,9 @@ class OrderLineListItem:
     unit_price: Decimal
     line_total: Decimal
     notes: str | None
+    variant_name: str | None = None
+    size: str | None = None
+    color: str | None = None
 
 
 @dataclass(frozen=True)
