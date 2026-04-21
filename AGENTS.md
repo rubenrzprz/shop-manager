@@ -161,6 +161,8 @@ The project currently has these completed vertical slices:
   - create products
   - list products
   - edit product core fields/default variant
+  - add/edit variants after product creation
+  - activate/deactivate individual variants
   - activate/deactivate products
   - searchable supplier picker in product dialog
 - Supplier Management v1
@@ -197,10 +199,14 @@ The project currently has these completed vertical slices:
 ## Current Design Decisions
 
 - Product SKU format is `<PREFIX>-<PRODUCT_ID>-<VARIANT_INDEX>`.
+- Variant SKUs are currently immutable after creation. Consider a guarded "Change SKU" action near
+  final development if real-world correction workflows need it, with uniqueness checks and warnings
+  for variants used in historical orders/stock movements.
 - Products must have at least one variant.
-- Product editing is limited to core fields and the first/default variant.
-- Full product variant management is still pending: adding variants after product creation,
-  editing non-default variants, and activating/deactivating variants should be a near-term slice.
+- Active products must have at least one active variant; deactivating the last active variant
+  automatically makes the product inactive.
+- Inactive products may have zero active variants, and adding/activating a variant does not
+  automatically reactivate the product.
 - Supplier/customer picker dialogs use one practical search box, not many field-specific filters.
 - Multi-line order creation uses a compact line composer plus an added-lines table.
 - Create order dialog previews subtotal, discount, and total before save; persisted totals remain
@@ -271,10 +277,10 @@ The project currently has these completed vertical slices:
 
 When asked to propose the next logical step, consider this order:
 
-1. Product variant management
-   - add variants to existing products
-   - edit non-default variants
-   - activate/deactivate variants while preserving historical order lines
+1. Product categories
+   - flexible product-level categories such as shirts, pants, etc.
+   - products can belong to multiple categories
+   - variants inherit their parent product categories for now
 2. Basic task reminders
    - add one-off task persistence, services, and tests
    - list tasks due today and mark tasks complete/reopened

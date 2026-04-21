@@ -15,11 +15,13 @@ from PySide6.QtWidgets import (
 
 from app.application.dto.products import ProductListItem
 from app.application.services.products import (
+    GetProductForEditService,
     ListProductsService,
     ProductStatusService,
 )
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialog_helpers import question
+from app.ui.dialogs.product_activation_variants_dialog import ProductActivationVariantsDialog
 from app.ui.dialogs.product_dialog import ProductDialog
 from app.ui.localization import t
 
@@ -159,14 +161,20 @@ class ProductsPage(QWidget):
             )
             return
 
-        confirmed = question(
-            self,
-            t(f"{action_label.title()} product"),
-            t(f"{action_label.title()} the selected product?"),
-        )
+        active_variant_ids = None
+        if should_be_active:
+            active_variant_ids = self._select_variants_for_activation(product_id)
+            if active_variant_ids is None:
+                return
+        else:
+            confirmed = question(
+                self,
+                t(f"{action_label.title()} product"),
+                t(f"{action_label.title()} the selected product?"),
+            )
 
-        if confirmed != QMessageBox.Yes:
-            return
+            if confirmed != QMessageBox.Yes:
+                return
 
         try:
             session = SessionLocal()
@@ -176,14 +184,39 @@ class ProductsPage(QWidget):
 
         try:
             service = ProductStatusService(session)
-            service.execute(product_id, is_active=should_be_active)
+            service.execute(
+                product_id,
+                is_active=should_be_active,
+                active_variant_ids=active_variant_ids,
+            )
             session.commit()
             self.load_products()
         except Exception as exc:
             session.rollback()
-            QMessageBox.critical(self, t(f"Could not {action_label} product"), str(exc))
+            QMessageBox.critical(self, t(f"Could not {action_label} product"), t(str(exc)))
         finally:
             session.close()
+
+    def _select_variants_for_activation(self, product_id: int) -> list[int] | None:
+        try:
+            session = SessionLocal()
+        except Exception as exc:
+            QMessageBox.critical(self, t("Could not activate product"), str(exc))
+            return None
+
+        try:
+            product = GetProductForEditService(session).execute(product_id)
+        except Exception as exc:
+            QMessageBox.critical(self, t("Could not activate product"), t(str(exc)))
+            return None
+        finally:
+            session.close()
+
+        dialog = ProductActivationVariantsDialog(product.variants, self)
+        if not dialog.exec():
+            return None
+
+        return dialog.selected_variant_ids
 
     def load_products(self) -> None:
         try:

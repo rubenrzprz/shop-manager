@@ -127,24 +127,28 @@ Later options:
 1. Dashboard shell
    - completed as the entry tab with quick actions and empty daily task sections
 2. Product variant management
-   - add variants to existing products before deepening task work
-   - edit non-default variants
-   - activate/deactivate variants while preserving historical order lines
-3. Basic tasks
+   - completed before deepening task work
+   - variants can be added/edited/activated/deactivated after product creation
+   - active products require at least one active variant
+3. Product categories
+   - flexible product-level categories
+   - products can belong to multiple categories
+   - variants inherit parent product categories for now
+4. Basic tasks
    - task table, DTOs, services, tests
    - create/list/complete/reopen one-off tasks
    - dashboard lists overdue, pending, and completed tasks
-4. Task series generation
+5. Task series generation
    - task series table
    - recurrence fields
    - `task_generation_horizon_days`
    - startup generation service
-5. Order-bound tasks
+6. Order-bound tasks
    - optional `order_id`
    - create custom reminders from orders
-6. Default order follow-up reminders
+7. Default order follow-up reminders
    - `default_order_follow_up_days`
    - automatic active-order reminders
-7. Calendar task view
+8. Calendar task view
    - browse days
    - create reminders from selected date

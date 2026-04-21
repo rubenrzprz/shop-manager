@@ -132,9 +132,9 @@ class OrderDialog(QDialog):
         self._line_composer.setLayout(composer_layout)
 
         self._lines_table = QTableWidget()
-        self._lines_table.setColumnCount(6)
+        self._lines_table.setColumnCount(7)
         self._lines_table.setHorizontalHeaderLabels(
-            [t("Product"), "SKU", t("Qty"), t("Unit Price"), t("Line Total"), ""]
+            [t("Product"), t("Variant"), "SKU", t("Qty"), t("Unit Price"), t("Line Total"), ""]
         )
         self._lines_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._lines_table.setSelectionMode(QAbstractItemView.NoSelection)
@@ -149,8 +149,9 @@ class OrderDialog(QDialog):
         lines_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         lines_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         lines_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        lines_header.setSectionResizeMode(5, QHeaderView.Fixed)
-        self._lines_table.setColumnWidth(5, 92)
+        lines_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        lines_header.setSectionResizeMode(6, QHeaderView.Fixed)
+        self._lines_table.setColumnWidth(6, 92)
 
         self._discount_type_input = QComboBox()
         self._discount_type_input.addItem(t("None"), DiscountType.NONE)
@@ -259,6 +260,9 @@ class OrderDialog(QDialog):
                     product_variant_id=line.product_variant_id,
                     product_name=line.product_name,
                     sku=line.sku,
+                    variant_name=line.variant_name,
+                    size=line.size,
+                    color=line.color,
                     quantity=line.quantity,
                     unit_price=line.unit_price,
                     notes=line.notes,
@@ -321,6 +325,9 @@ class OrderDialog(QDialog):
                 product_variant_id=self._selected_line_variant.id,
                 product_name=self._selected_line_variant.product_name,
                 sku=self._selected_line_variant.sku,
+                variant_name=self._selected_line_variant.variant_name,
+                size=self._selected_line_variant.size,
+                color=self._selected_line_variant.color,
                 quantity=self._quantity_input.value(),
                 unit_price=self._unit_price_value(),
                 notes=None,
@@ -343,12 +350,13 @@ class OrderDialog(QDialog):
     def _refresh_lines_table(self) -> None:
         can_edit_full_order = self._edit_capability == OrderEditCapability.FULL
         self._lines_table.clearContents()
-        self._lines_table.setColumnHidden(5, not can_edit_full_order)
+        self._lines_table.setColumnHidden(6, not can_edit_full_order)
         self._lines_table.setRowCount(len(self._line_items))
 
         for row, line_item in enumerate(self._line_items):
             items = [
                 QTableWidgetItem(line_item.product_name),
+                QTableWidgetItem(line_item.variant_label()),
                 QTableWidgetItem(line_item.sku),
                 QTableWidgetItem(str(line_item.quantity)),
                 QTableWidgetItem(
@@ -369,9 +377,9 @@ class OrderDialog(QDialog):
                 remove_button.clicked.connect(
                     lambda _checked=False, item=line_item: self._remove_line_item(item)
                 )
-                self._lines_table.setCellWidget(row, 5, remove_button)
+                self._lines_table.setCellWidget(row, 6, remove_button)
             else:
-                self._lines_table.setItem(row, 5, QTableWidgetItem(""))
+                self._lines_table.setItem(row, 6, QTableWidgetItem(""))
 
         self._lines_table.resizeRowsToContents()
 
@@ -597,6 +605,9 @@ class _OrderLineItem:
     quantity: int
     unit_price: Decimal | None
     notes: str | None
+    variant_name: str | None = None
+    size: str | None = None
+    color: str | None = None
 
     def to_input(self) -> CreateOrderLineInput:
         return CreateOrderLineInput(
@@ -620,6 +631,10 @@ class _OrderLineItem:
             return Decimal("0.00")
 
         return self.unit_price * self.quantity
+
+    def variant_label(self) -> str:
+        parts = [self.variant_name, self.size, self.color]
+        return " / ".join(part for part in parts if part)
 
 
 @dataclass(frozen=True)
