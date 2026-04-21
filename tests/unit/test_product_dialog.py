@@ -72,6 +72,40 @@ def test_add_variant_to_existing_product_stays_pending(monkeypatch):
     assert dialog._variant_drafts[0].size == "M"
 
 
+def test_product_dialog_category_selection_reads_draggable_list_order():
+    dialog = ProductDialog.__new__(ProductDialog)
+    dialog._selected_category_ids = []
+
+    class FakeItem:
+        def __init__(self, category_id):
+            self._category_id = category_id
+
+        def data(self, _role):
+            return self._category_id
+
+    class FakeSelectedCategoryList:
+        def __init__(self):
+            self.category_ids = [3, 1]
+
+        def count(self):
+            return len(self.category_ids)
+
+        def item(self, row):
+            return FakeItem(self.category_ids[row])
+
+        def takeItem(self, row):
+            self.category_ids.pop(row)
+
+    dialog._selected_categories_list = FakeSelectedCategoryList()
+    dialog._populate_categories_table = lambda: None
+
+    assert ProductDialog._selected_category_ids_from_table(dialog) == [3, 1]
+
+    ProductDialog._remove_category(dialog, 3)
+
+    assert ProductDialog._selected_category_ids_from_table(dialog) == [1]
+
+
 def test_pending_variant_changes_are_applied_on_save(monkeypatch):
     calls = []
     session = object()

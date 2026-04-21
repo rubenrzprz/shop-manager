@@ -6,6 +6,7 @@ from app.domain.enums import CustomerType, DiscountType
 from app.ui.dialogs.order_dialog import OrderDialog, _OrderLineItem
 from app.ui.dialogs.customer_picker_dialog import CustomerPickerDialog
 from app.ui.dialogs.product_variant_picker_dialog import ProductVariantPickerDialog
+from app.ui.widgets.products_page import ProductsPage
 
 
 def test_customer_picker_filter_matches_name_company_tax_phone_and_email():
@@ -40,6 +41,7 @@ def test_product_variant_picker_filter_matches_product_sku_variant_size_and_colo
         price=Decimal("49.90"),
         product_is_active=True,
         variant_is_active=True,
+        category_names=["Shirts", "Ceremony"],
     )
 
     assert ProductVariantPickerDialog._matches_variant(variant, "traditional")
@@ -47,7 +49,22 @@ def test_product_variant_picker_filter_matches_product_sku_variant_size_and_colo
     assert ProductVariantPickerDialog._matches_variant(variant, "size m")
     assert ProductVariantPickerDialog._matches_variant(variant, "m")
     assert ProductVariantPickerDialog._matches_variant(variant, "white")
+    assert ProductVariantPickerDialog._matches_variant(variant, "ceremony")
     assert not ProductVariantPickerDialog._matches_variant(variant, "supplier")
+
+
+def test_product_variant_picker_category_summary_keeps_table_compact():
+    assert ProductVariantPickerDialog._category_summary([]) == ""
+    assert ProductVariantPickerDialog._category_summary(["Shirts"]) == "Shirts"
+    assert ProductVariantPickerDialog._category_summary(["Shirts", "Ceremony", "Sale"]) == (
+        "Shirts +2"
+    )
+
+
+def test_products_page_category_summary_keeps_table_compact():
+    assert ProductsPage._category_summary([]) == ""
+    assert ProductsPage._category_summary(["Category C"]) == "Category C"
+    assert ProductsPage._category_summary(["Category C", "Category A", "Sale"]) == "Category C +2"
 
 
 def test_order_dialog_unit_price_value_distinguishes_unset_from_explicit_zero():
