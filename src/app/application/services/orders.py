@@ -35,13 +35,11 @@ STRICT_FULL_EDIT_ORDER_STATUSES = {
     OrderStatus.CONFIRMED,
     OrderStatus.IN_PROGRESS,
 }
-ORDER_STATUS_TRANSITIONS = {
-    OrderStatus.DRAFT: {OrderStatus.CONFIRMED, OrderStatus.CANCELLED},
-    OrderStatus.CONFIRMED: {OrderStatus.DRAFT, OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED},
-    OrderStatus.IN_PROGRESS: {OrderStatus.CONFIRMED, OrderStatus.READY, OrderStatus.CANCELLED},
-    OrderStatus.READY: {OrderStatus.IN_PROGRESS, OrderStatus.COMPLETED, OrderStatus.CANCELLED},
-    OrderStatus.COMPLETED: {OrderStatus.READY},
-    OrderStatus.CANCELLED: {OrderStatus.DRAFT},
+ACTIVE_ORDER_STATUSES = {
+    OrderStatus.DRAFT,
+    OrderStatus.CONFIRMED,
+    OrderStatus.IN_PROGRESS,
+    OrderStatus.READY,
 }
 
 
@@ -681,33 +679,78 @@ class UpdateOrderStatusService:
 
         return order
 
-    @classmethod
     def can_transition(
-        cls,
+        self,
         current_status: OrderStatus,
         target_status: OrderStatus,
     ) -> bool:
-        return target_status in ORDER_STATUS_TRANSITIONS[current_status]
+        return self._can_transition(
+            current_status,
+            target_status,
+            ApplicationSettingsService(self._session).enabled_order_statuses(),
+        )
 
-    @classmethod
-    def next_forward_status(cls, current_status: OrderStatus) -> OrderStatus | None:
-        forward_transitions = {
-            OrderStatus.DRAFT: OrderStatus.CONFIRMED,
-            OrderStatus.CONFIRMED: OrderStatus.IN_PROGRESS,
-            OrderStatus.IN_PROGRESS: OrderStatus.READY,
-            OrderStatus.READY: OrderStatus.COMPLETED,
-        }
-        return forward_transitions.get(current_status)
+    @staticmethod
+    def _can_transition(
+        current_status: OrderStatus,
+        target_status: OrderStatus,
+        enabled_statuses: tuple[OrderStatus, ...],
+    ) -> bool:
+        if target_status == OrderStatus.CANCELLED:
+            return current_status in ACTIVE_ORDER_STATUSES
+        if current_status == OrderStatus.CANCELLED and target_status == OrderStatus.DRAFT:
+            return True
 
-    @classmethod
-    def previous_status(cls, current_status: OrderStatus) -> OrderStatus | None:
-        reverse_transitions = {
-            OrderStatus.CONFIRMED: OrderStatus.DRAFT,
-            OrderStatus.IN_PROGRESS: OrderStatus.CONFIRMED,
-            OrderStatus.READY: OrderStatus.IN_PROGRESS,
-            OrderStatus.COMPLETED: OrderStatus.READY,
+        return target_status in {
+            UpdateOrderStatusService._next_forward_status(current_status, enabled_statuses),
+            UpdateOrderStatusService._previous_status(current_status, enabled_statuses),
         }
-        return reverse_transitions.get(current_status)
+
+    def next_forward_status(self, current_status: OrderStatus) -> OrderStatus | None:
+        return self._next_forward_status(
+            current_status,
+            ApplicationSettingsService(self._session).enabled_order_statuses(),
+        )
+
+    @staticmethod
+    def _next_forward_status(
+        current_status: OrderStatus,
+        enabled_statuses: tuple[OrderStatus, ...],
+    ) -> OrderStatus | None:
+        if current_status in {OrderStatus.COMPLETED, OrderStatus.CANCELLED}:
+            return None
+        if current_status not in enabled_statuses:
+            return None
+
+        current_index = enabled_statuses.index(current_status)
+        for status in enabled_statuses[current_index + 1 :]:
+            if status != OrderStatus.CANCELLED:
+                return status
+
+        return None
+
+    def previous_status(self, current_status: OrderStatus) -> OrderStatus | None:
+        return self._previous_status(
+            current_status,
+            ApplicationSettingsService(self._session).enabled_order_statuses(),
+        )
+
+    @staticmethod
+    def _previous_status(
+        current_status: OrderStatus,
+        enabled_statuses: tuple[OrderStatus, ...],
+    ) -> OrderStatus | None:
+        if current_status in {OrderStatus.DRAFT, OrderStatus.CANCELLED}:
+            return None
+        if current_status not in enabled_statuses:
+            return None
+
+        current_index = enabled_statuses.index(current_status)
+        for status in reversed(enabled_statuses[:current_index]):
+            if status != OrderStatus.CANCELLED:
+                return status
+
+        return None
 
 
 class ListOrdersService:
