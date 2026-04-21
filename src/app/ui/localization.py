@@ -29,6 +29,16 @@ def order_status_label(status: OrderStatus) -> str:
 _TRANSLATIONS = {
     "es": {
         "Shop Manager": "Gestor de tienda",
+        "Dashboard": "Panel",
+        "Shortcuts": "Accesos directos",
+        "Quick Actions": "Acciones rápidas",
+        "Daily Tasks": "Tareas del día",
+        "Overdue": "Atrasadas",
+        "Pending Today": "Pendientes hoy",
+        "Completed Today": "Completadas hoy",
+        "No overdue tasks.": "No hay tareas atrasadas.",
+        "No pending tasks for today.": "No hay tareas pendientes para hoy.",
+        "No completed tasks for today.": "No hay tareas completadas para hoy.",
         "Products": "Productos",
         "Suppliers": "Proveedores",
         "Customers": "Clientes",
