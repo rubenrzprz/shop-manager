@@ -187,13 +187,13 @@ _TRANSLATIONS = {
         "Order cannot be edited": "El pedido no se puede editar",
         "Select an order to advance.": "Selecciona un pedido para avanzar.",
         "Order cannot advance": "El pedido no puede avanzar",
-        "Completed and cancelled orders cannot be advanced.": (
-            "Los pedidos completados y cancelados no pueden avanzar."
+        "This order cannot be advanced in the configured workflow.": (
+            "Este pedido no puede avanzar en el flujo configurado."
         ),
         "Select an order to revert.": "Selecciona un pedido para revertir.",
         "Order cannot revert": "El pedido no puede revertirse",
-        "Draft and cancelled orders cannot be reverted.": (
-            "Los pedidos en borrador y cancelados no pueden revertirse."
+        "This order cannot be reverted in the configured workflow.": (
+            "Este pedido no puede revertirse en el flujo configurado."
         ),
         "Select an order to cancel.": "Selecciona un pedido para cancelar.",
         "Order cannot be cancelled": "El pedido no puede cancelarse",
@@ -239,6 +239,16 @@ _TRANSLATIONS = {
         "English": "Inglés",
         "Spanish": "Español",
         "Strict order workflow": "Flujo estricto de pedidos",
+        "Enabled order statuses": "Estados de pedido habilitados",
+        "Choose which statuses are used when advancing or reverting orders. Draft, completed, and cancelled are always required.": (
+            "Elige qué estados se usan al avanzar o revertir pedidos. Borrador, completado "
+            "y cancelado siempre son obligatorios."
+        ),
+        "Disable order statuses": "Desactivar estados de pedido",
+        "Orders currently in disabled statuses will be converted to draft:": (
+            "Los pedidos que estén en estados desactivados se convertirán a borrador:"
+        ),
+        "Continue saving settings?": "¿Continuar guardando los ajustes?",
         "When enabled, only draft orders can be fully edited. When disabled, active orders can be edited with the same rules as drafts.": (
             "Cuando está activado, solo los pedidos en borrador se pueden editar por completo. "
             "Cuando está desactivado, los pedidos activos se pueden editar con las mismas "

@@ -181,6 +181,7 @@ The project currently has these completed vertical slices:
   - typed settings service
   - settings tab
   - strict order workflow toggle
+  - configurable enabled order statuses
 - Spanish Localization v1
   - `app_language` setting
   - lightweight UI translation helper
@@ -212,13 +213,18 @@ The project currently has these completed vertical slices:
 - Status-aware editing rules should be practical rather than forcing unnecessary status churn:
   `DRAFT`, `CONFIRMED`, and `IN_PROGRESS` allow full edits; `READY` allows deadline, discount,
   and notes only; `COMPLETED` and `CANCELLED` allow notes only.
-- A future configurable status workflow setting may let clients choose which order statuses they use
-  (for example only draft/confirmed/completed/cancelled), but this affects transitions, UI actions,
-  reporting, and defaults, so keep it separate from status-aware editing.
+- `enabled_order_statuses` is a typed setting. `DRAFT`, `COMPLETED`, and `CANCELLED` are required;
+  `CONFIRMED`, `IN_PROGRESS`, and `READY` can be disabled for simpler client workflows.
+- Advance/revert order actions use the configured enabled status path and skip disabled statuses.
+- Disabling optional order statuses converts existing orders currently in those statuses to `DRAFT`
+  after user confirmation so they do not remain stranded outside the configured workflow.
+  `CANCELLED` remains outside the normal forward path; cancellation and recovery are explicit
+  actions.
 - Likely future settings include currency code, default order deadline days, requiring order
   deadlines, default discount type, manual unit price override, cancelled order reopen behavior,
   stock deduction status, allowing negative stock, and default customer type.
-- Order status transitions follow `DRAFT -> CONFIRMED -> IN_PROGRESS -> READY -> COMPLETED`.
+- By default, order status transitions follow
+  `DRAFT -> CONFIRMED -> IN_PROGRESS -> READY -> COMPLETED`.
 - Forward-path statuses can be reverted one step for accidental advances, including
   `COMPLETED -> READY`.
 - Active non-completed statuses can transition to `CANCELLED`.
@@ -236,14 +242,10 @@ When asked to propose the next logical step, consider this order:
    - translate any newly added UI strings through the existing helper
    - consider service-layer message codes if application validation errors need full localization
    - consider broader formatting localization for currency/date display
-2. Configurable order status workflow
-   - let clients choose which order statuses are enabled if the workflow needs to be simplified
-   - update transitions, advance/revert actions, defaults, and reporting consistently
-   - keep this separate from field-level status-aware editing rules
-3. Stock movements
+2. Stock movements
    - reduce stock when an order reaches the appropriate status
    - do not mix stock behavior into basic order create/list
-4. Shipment workflows
+3. Shipment workflows
    - create/update shipment info for orders
 
 Prefer one small vertical slice per branch.

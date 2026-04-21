@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
+    QGroupBox,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -11,8 +12,10 @@ from PySide6.QtWidgets import (
 )
 
 from app.application.services.settings import ApplicationSettingsService
+from app.domain.enums import OrderStatus
 from app.infrastructure.db.session import SessionLocal
-from app.ui.localization import SUPPORTED_LANGUAGES, set_language, t
+from app.ui.dialog_helpers import question
+from app.ui.localization import SUPPORTED_LANGUAGES, order_status_label, set_language, t
 
 
 class SettingsPage(QWidget):
@@ -33,6 +36,28 @@ class SettingsPage(QWidget):
         self._strict_order_workflow_description = QLabel()
         self._strict_order_workflow_description.setWordWrap(True)
 
+        self._order_status_group = QGroupBox()
+        self._order_status_description = QLabel()
+        self._order_status_description.setWordWrap(True)
+        self._order_status_checkboxes: dict[OrderStatus, QCheckBox] = {}
+        order_status_layout = QVBoxLayout()
+        order_status_layout.addWidget(self._order_status_description)
+        for status in (
+            OrderStatus.DRAFT,
+            OrderStatus.CONFIRMED,
+            OrderStatus.IN_PROGRESS,
+            OrderStatus.READY,
+            OrderStatus.COMPLETED,
+            OrderStatus.CANCELLED,
+        ):
+            checkbox = QCheckBox()
+            if status in {OrderStatus.DRAFT, OrderStatus.COMPLETED, OrderStatus.CANCELLED}:
+                checkbox.setChecked(True)
+                checkbox.setEnabled(False)
+            self._order_status_checkboxes[status] = checkbox
+            order_status_layout.addWidget(checkbox)
+        self._order_status_group.setLayout(order_status_layout)
+
         self._save_button = QPushButton()
         self._save_button.clicked.connect(self.save_settings)
 
@@ -44,6 +69,7 @@ class SettingsPage(QWidget):
         layout.addLayout(self._form)
         layout.addWidget(self._strict_order_workflow_checkbox)
         layout.addWidget(self._strict_order_workflow_description)
+        layout.addWidget(self._order_status_group)
         layout.addWidget(self._save_button)
         layout.addStretch()
         self.setLayout(layout)
@@ -65,6 +91,15 @@ class SettingsPage(QWidget):
                 "can be edited with the same rules as drafts."
             )
         )
+        self._order_status_group.setTitle(t("Enabled order statuses"))
+        self._order_status_description.setText(
+            t(
+                "Choose which statuses are used when advancing or reverting orders. Draft, "
+                "completed, and cancelled are always required."
+            )
+        )
+        for status, checkbox in self._order_status_checkboxes.items():
+            checkbox.setText(t(status.value.title().replace("_", " ")))
         self._save_button.setText(t("Save Settings"))
 
     def load_settings(self) -> None:
@@ -80,6 +115,8 @@ class SettingsPage(QWidget):
             if language_index >= 0:
                 self._language_input.setCurrentIndex(language_index)
             self._strict_order_workflow_checkbox.setChecked(settings.strict_order_workflow_enabled)
+            for status, checkbox in self._order_status_checkboxes.items():
+                checkbox.setChecked(status in settings.enabled_order_statuses)
         except Exception as exc:
             QMessageBox.critical(self, t("Could not load settings"), str(exc))
         finally:
@@ -95,10 +132,20 @@ class SettingsPage(QWidget):
         try:
             service = ApplicationSettingsService(session)
             selected_language = self._language_input.currentData()
+            enabled_order_statuses = self._enabled_order_statuses_value()
+            conversion_counts = service.disabled_order_status_conversion_counts(
+                enabled_order_statuses
+            )
+            if conversion_counts and not self._confirm_disabled_status_conversion(
+                conversion_counts
+            ):
+                return
+
             service.set_app_language(selected_language)
             service.set_strict_order_workflow_enabled(
                 self._strict_order_workflow_checkbox.isChecked()
             )
+            service.set_enabled_order_statuses(enabled_order_statuses)
             session.commit()
             set_language(selected_language)
             self.language_changed.emit(selected_language)
@@ -108,3 +155,27 @@ class SettingsPage(QWidget):
             QMessageBox.critical(self, t("Could not save settings"), str(exc))
         finally:
             session.close()
+
+    def _enabled_order_statuses_value(self) -> tuple[OrderStatus, ...]:
+        return tuple(
+            status
+            for status, checkbox in self._order_status_checkboxes.items()
+            if checkbox.isChecked()
+        )
+
+    def _confirm_disabled_status_conversion(
+        self,
+        conversion_counts: dict[OrderStatus, int],
+    ) -> bool:
+        status_summary = ", ".join(
+            f"{order_status_label(status)} ({count})" for status, count in conversion_counts.items()
+        )
+        response = question(
+            self,
+            t("Disable order statuses"),
+            (
+                f"{t('Orders currently in disabled statuses will be converted to draft:')} "
+                f"{status_summary}\n\n{t('Continue saving settings?')}"
+            ),
+        )
+        return response == QMessageBox.Yes

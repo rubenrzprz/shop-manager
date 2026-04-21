@@ -159,12 +159,25 @@ class OrdersPage(QWidget):
             QMessageBox.information(self, t("No order selected"), t("Select an order to advance."))
             return
 
-        next_status = UpdateOrderStatusService.next_forward_status(order.status)
+        try:
+            session = SessionLocal()
+        except Exception as exc:
+            QMessageBox.critical(self, t("Could not update order status"), str(exc))
+            return
+
+        try:
+            next_status = UpdateOrderStatusService(session).next_forward_status(order.status)
+        except Exception as exc:
+            QMessageBox.critical(self, t("Could not update order status"), str(exc))
+            return
+        finally:
+            session.close()
+
         if next_status is None:
             QMessageBox.information(
                 self,
                 t("Order cannot advance"),
-                t("Completed and cancelled orders cannot be advanced."),
+                t("This order cannot be advanced in the configured workflow."),
             )
             return
 
@@ -176,12 +189,25 @@ class OrdersPage(QWidget):
             QMessageBox.information(self, t("No order selected"), t("Select an order to revert."))
             return
 
-        previous_status = UpdateOrderStatusService.previous_status(order.status)
+        try:
+            session = SessionLocal()
+        except Exception as exc:
+            QMessageBox.critical(self, t("Could not update order status"), str(exc))
+            return
+
+        try:
+            previous_status = UpdateOrderStatusService(session).previous_status(order.status)
+        except Exception as exc:
+            QMessageBox.critical(self, t("Could not update order status"), str(exc))
+            return
+        finally:
+            session.close()
+
         if previous_status is None:
             QMessageBox.information(
                 self,
                 t("Order cannot revert"),
-                t("Draft and cancelled orders cannot be reverted."),
+                t("This order cannot be reverted in the configured workflow."),
             )
             return
 
@@ -193,7 +219,23 @@ class OrdersPage(QWidget):
             QMessageBox.information(self, t("No order selected"), t("Select an order to cancel."))
             return
 
-        if not UpdateOrderStatusService.can_transition(order.status, OrderStatus.CANCELLED):
+        try:
+            session = SessionLocal()
+        except Exception as exc:
+            QMessageBox.critical(self, t("Could not update order status"), str(exc))
+            return
+
+        try:
+            can_cancel_order = UpdateOrderStatusService(session).can_transition(
+                order.status, OrderStatus.CANCELLED
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, t("Could not update order status"), str(exc))
+            return
+        finally:
+            session.close()
+
+        if not can_cancel_order:
             QMessageBox.information(
                 self,
                 t("Order cannot be cancelled"),
