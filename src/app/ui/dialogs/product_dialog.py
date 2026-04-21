@@ -534,12 +534,11 @@ class ProductDialog(QDialog):
         if self._product_id is None:
             return
 
-        for variant in self._variant_drafts:
+        existing_variants = [variant for variant in self._variant_drafts if variant.id is not None]
+        new_variants = [variant for variant in self._variant_drafts if variant.id is None]
+
+        for variant in existing_variants:
             if variant.id is None:
-                CreateProductVariantService(session).execute(
-                    self._product_id,
-                    self._create_input_from_draft(variant),
-                )
                 continue
 
             UpdateProductVariantService(session).execute(
@@ -555,11 +554,29 @@ class ProductDialog(QDialog):
                     stock_minimum=variant.stock_minimum,
                 ),
             )
+
+        for variant in existing_variants:
             if (
-                variant.original_is_active is not None
-                and variant.is_active != variant.original_is_active
+                variant.id is not None
+                and variant.original_is_active is False
+                and variant.is_active is True
             ):
-                ProductVariantStatusService(session).execute(variant.id, variant.is_active)
+                ProductVariantStatusService(session).execute(variant.id, True)
+
+        for variant in new_variants:
+            if variant.id is None:
+                CreateProductVariantService(session).execute(
+                    self._product_id,
+                    self._create_input_from_draft(variant),
+                )
+
+        for variant in existing_variants:
+            if (
+                variant.id is not None
+                and variant.original_is_active is True
+                and variant.is_active is False
+            ):
+                ProductVariantStatusService(session).execute(variant.id, False)
 
     @staticmethod
     def _draft_from_create_input(data: CreateProductVariantInput) -> _VariantDraft:

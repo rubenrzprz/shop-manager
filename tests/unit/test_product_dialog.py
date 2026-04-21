@@ -146,6 +146,87 @@ def test_pending_variant_changes_are_applied_on_save(monkeypatch):
 
     assert calls == [
         ("update", 1, "Red / M", 3),
-        ("status", 1, False),
         ("create", 10, "Blue / L", True),
+        ("status", 1, False),
+    ]
+
+
+def test_pending_variant_status_swap_activates_before_deactivating(monkeypatch):
+    calls = []
+    session = object()
+    dialog = ProductDialog.__new__(ProductDialog)
+    dialog._product_id = 10
+    dialog._variant_drafts = [
+        product_dialog_module._VariantDraft(
+            id=1,
+            sku="TSHIRT-10-1",
+            size=None,
+            color=None,
+            variant_name="Old active",
+            description=None,
+            price_override=None,
+            stock_current=None,
+            stock_minimum=None,
+            is_active=False,
+            original_is_active=True,
+        ),
+        product_dialog_module._VariantDraft(
+            id=2,
+            sku="TSHIRT-10-2",
+            size=None,
+            color=None,
+            variant_name="New active",
+            description=None,
+            price_override=None,
+            stock_current=None,
+            stock_minimum=None,
+            is_active=True,
+            original_is_active=False,
+        ),
+    ]
+
+    class FakeCreateProductVariantService:
+        def __init__(self, service_session):
+            assert service_session is session
+
+        def execute(self, product_id, data):
+            calls.append(("create", product_id, data.variant_name, data.is_active))
+
+    class FakeUpdateProductVariantService:
+        def __init__(self, service_session):
+            assert service_session is session
+
+        def execute(self, variant_id, data):
+            calls.append(("update", variant_id, data.variant_name))
+
+    class FakeProductVariantStatusService:
+        def __init__(self, service_session):
+            assert service_session is session
+
+        def execute(self, variant_id, is_active):
+            calls.append(("status", variant_id, is_active))
+
+    monkeypatch.setattr(
+        product_dialog_module,
+        "CreateProductVariantService",
+        FakeCreateProductVariantService,
+    )
+    monkeypatch.setattr(
+        product_dialog_module,
+        "UpdateProductVariantService",
+        FakeUpdateProductVariantService,
+    )
+    monkeypatch.setattr(
+        product_dialog_module,
+        "ProductVariantStatusService",
+        FakeProductVariantStatusService,
+    )
+
+    ProductDialog._apply_pending_variant_changes(dialog, session)
+
+    assert calls == [
+        ("update", 1, "Old active"),
+        ("update", 2, "New active"),
+        ("status", 2, True),
+        ("status", 1, False),
     ]
