@@ -2,7 +2,7 @@ import re
 from decimal import Decimal
 
 import unicodedata
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload, joinedload
 
 from app.application.dto.products import (
@@ -523,7 +523,7 @@ class CreateProductVariantService:
         if product is None:
             raise ValueError("Product not found.")
 
-        variant_index = len(product.variants) + 1
+        variant_index = self._next_variant_index(product.id)
         create_service = CreateProductService(self._session)
         create_service._validate_variant_input(data, variant_index)
 
@@ -558,6 +558,14 @@ class CreateProductVariantService:
         )
         if existing_variant is not None:
             raise ValueError("Product variant SKU already exists.")
+
+    def _next_variant_index(self, product_id: int) -> int:
+        variant_count = self._session.scalar(
+            select(func.count()).select_from(ProductVariant).where(
+                ProductVariant.product_id == product_id
+            )
+        )
+        return (variant_count or 0) + 1
 
 
 class UpdateProductVariantService:

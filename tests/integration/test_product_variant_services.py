@@ -41,6 +41,22 @@ def test_create_product_variant_service_adds_variant_with_next_sku(db_session):
     assert variant.price_override == Decimal("45.00")
 
 
+def test_create_product_variant_service_generates_unique_skus_for_pending_variants(db_session):
+    product = CreateProductService(db_session).execute(
+        CreateProductInput(
+            name="Camiseta tradicional",
+            variants=[CreateProductVariantInput(variant_name="Default")],
+        )
+    )
+    service = CreateProductVariantService(db_session)
+
+    second = service.execute(product.id, CreateProductVariantInput(variant_name="Second"))
+    third = service.execute(product.id, CreateProductVariantInput(variant_name="Third"))
+
+    assert second.sku == f"CAM-{product.id:04d}-02"
+    assert third.sku == f"CAM-{product.id:04d}-03"
+
+
 def test_create_product_variant_service_does_not_activate_inactive_product(db_session):
     product = CreateProductService(db_session).execute(
         CreateProductInput(
