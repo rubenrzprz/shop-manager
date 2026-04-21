@@ -20,11 +20,12 @@ application services to keep business logic out of the interface layer.
 - 🔁 Order workflows: configurable statuses, advance/revert/cancel/recover actions
 - ⚙️ Settings: typed application settings backed by the database
 - 🌐 Localization: English and Spanish UI labels/messages
+- 🏠 Dashboard shell: entry tab with quick actions and daily task empty states
 
 ## What Is Coming 🧭
 
-- 🏠 Dashboard entry point with shortcuts and daily reminders
 - ✅ Standalone tasks and order-linked reminders
+- 🧩 Full product variant management
 - 🔁 Recurring task generation through a configurable planning horizon
 - 📅 Calendar-based task planning
 - 📦 Stock movements
@@ -156,10 +157,10 @@ SQLAlchemy models stay behind service boundaries.
 
 Near-term implementation path:
 
-1. Dashboard shell
-   - make the dashboard the entry point
-   - add shortcuts to core app areas
-   - add pending/completed daily task sections
+1. Product variant management
+   - add variants to existing products
+   - edit non-default variants
+   - activate/deactivate variants
 2. Basic tasks
    - create standalone reminders
    - list tasks due today

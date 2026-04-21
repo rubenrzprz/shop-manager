@@ -153,6 +153,10 @@ Keep PR bodies accurate after follow-up commits. Update test counts after local 
 
 The project currently has these completed vertical slices:
 
+- Dashboard Shell v1
+  - dashboard is the first application tab
+  - quick action buttons open create product/supplier/customer/order flows and settings
+  - daily task sections show empty states for overdue, pending today, and completed today
 - Product Management v1
   - create products
   - list products
@@ -195,6 +199,8 @@ The project currently has these completed vertical slices:
 - Product SKU format is `<PREFIX>-<PRODUCT_ID>-<VARIANT_INDEX>`.
 - Products must have at least one variant.
 - Product editing is limited to core fields and the first/default variant.
+- Full product variant management is still pending: adding variants after product creation,
+  editing non-default variants, and activating/deactivating variants should be a near-term slice.
 - Supplier/customer picker dialogs use one practical search box, not many field-specific filters.
 - Multi-line order creation uses a compact line composer plus an added-lines table.
 - Create order dialog previews subtotal, discount, and total before save; persisted totals remain
@@ -265,10 +271,10 @@ The project currently has these completed vertical slices:
 
 When asked to propose the next logical step, consider this order:
 
-1. Dashboard shell
-   - make Dashboard the app entry point
-   - add shortcuts to products, suppliers, customers, orders, and settings
-   - add overdue, pending, and completed daily task sections with empty states
+1. Product variant management
+   - add variants to existing products
+   - edit non-default variants
+   - activate/deactivate variants while preserving historical order lines
 2. Basic task reminders
    - add one-off task persistence, services, and tests
    - list tasks due today and mark tasks complete/reopened
