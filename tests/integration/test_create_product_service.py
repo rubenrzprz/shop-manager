@@ -1,8 +1,18 @@
 from decimal import Decimal
 
+import pytest
+
 from app.application.dto.products import CreateProductInput, CreateProductVariantInput
 from app.application.services.products import CreateProductService
 from app.infrastructure.db.models import Supplier
+
+
+def test_create_product_service_fails_without_variants(db_session):
+    service = CreateProductService(db_session)
+
+    with pytest.raises(ValueError, match="A product must have at least one variant."):
+        service.execute(CreateProductInput(name="Camiseta tradicional", variants=[]))
+
 
 def test_create_product_service_creates_product_with_default_variant(db_session):
     supplier = Supplier(
