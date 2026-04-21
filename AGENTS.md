@@ -164,6 +164,9 @@ The project currently has these completed vertical slices:
   - add/edit variants after product creation
   - activate/deactivate individual variants
   - activate/deactivate products
+  - manage product categories
+  - assign products to multiple categories
+  - product list shows assigned categories
   - searchable supplier picker in product dialog
 - Supplier Management v1
   - create suppliers
@@ -207,6 +210,10 @@ The project currently has these completed vertical slices:
   automatically makes the product inactive.
 - Inactive products may have zero active variants, and adding/activating a variant does not
   automatically reactivate the product.
+- Product categories are product-level only for now; a product can belong to multiple categories,
+  and variants inherit their parent product categories.
+- Inactive categories can remain assigned to existing products, but inactive categories should not
+  be newly assigned to products.
 - Supplier/customer picker dialogs use one practical search box, not many field-specific filters.
 - Multi-line order creation uses a compact line composer plus an added-lines table.
 - Create order dialog previews subtotal, discount, and total before save; persisted totals remain
@@ -277,10 +284,9 @@ The project currently has these completed vertical slices:
 
 When asked to propose the next logical step, consider this order:
 
-1. Product categories
-   - flexible product-level categories such as shirts, pants, etc.
-   - products can belong to multiple categories
-   - variants inherit their parent product categories for now
+1. Product category grouping/filtering
+   - group/filter the products page by category
+   - consider category filters in product/variant pickers when order creation needs it
 2. Basic task reminders
    - add one-off task persistence, services, and tests
    - list tasks due today and mark tasks complete/reopened

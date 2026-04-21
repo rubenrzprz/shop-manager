@@ -130,10 +130,10 @@ Later options:
    - completed before deepening task work
    - variants can be added/edited/activated/deactivated after product creation
    - active products require at least one active variant
-3. Product categories
-   - flexible product-level categories
-   - products can belong to multiple categories
-   - variants inherit parent product categories for now
+3. Product category grouping/filtering
+   - category persistence and assignment are implemented
+   - group/filter the product table by assigned categories later
+   - consider category filters in order product/variant selection later
 4. Basic tasks
    - task table, DTOs, services, tests
    - create/list/complete/reopen one-off tasks
