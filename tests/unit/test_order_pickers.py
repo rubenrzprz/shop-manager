@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from app.application.dto.customers import CustomerPickerItem
-from app.application.dto.products import ProductVariantPickerItem
+from app.application.dto.products import ProductListItem, ProductVariantPickerItem
 from app.domain.enums import CustomerType, DiscountType
 from app.ui.dialogs.order_dialog import OrderDialog, _OrderLineItem
 from app.ui.dialogs.customer_picker_dialog import CustomerPickerDialog
@@ -110,6 +110,50 @@ def test_products_page_category_summary_keeps_table_compact():
     assert ProductsPage._category_summary([]) == ""
     assert ProductsPage._category_summary(["Category C"]) == "Category C"
     assert ProductsPage._category_summary(["Category C", "Category A", "Sale"]) == "Category C +2"
+
+
+def test_products_page_clears_stale_category_widgets():
+    page = ProductsPage.__new__(ProductsPage)
+
+    class FakeTable:
+        def __init__(self):
+            self.removed = []
+            self.widgets = []
+            self.rows = 0
+
+        def setRowCount(self, rows):
+            self.rows = rows
+
+        def removeCellWidget(self, row, column):
+            self.removed.append((row, column))
+
+        def setCellWidget(self, row, column, widget):
+            self.widgets.append((row, column, widget))
+
+        def setItem(self, _row, _column, _item):
+            pass
+
+    table = FakeTable()
+    page._table = table
+    products = [
+        ProductListItem(
+            id=1,
+            supplier_id=None,
+            supplier_name=None,
+            name="Traditional Shirt",
+            description=None,
+            base_price=Decimal("49.90"),
+            track_stock=False,
+            is_active=True,
+            categories=[],
+            variants=[],
+        )
+    ]
+
+    ProductsPage._populate_table(page, products)
+
+    assert table.removed == [(0, 1)]
+    assert table.widgets == []
 
 
 def test_order_dialog_unit_price_value_distinguishes_unset_from_explicit_zero():
