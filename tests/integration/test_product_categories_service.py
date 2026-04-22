@@ -54,6 +54,18 @@ def test_update_product_category_service_updates_category(db_session):
     assert updated.is_active is False
 
 
+def test_update_product_category_service_checks_missing_category_before_duplicate_name(
+    db_session,
+):
+    CreateProductCategoryService(db_session).execute(CreateProductCategoryInput(name="Shirts"))
+
+    with pytest.raises(ValueError, match="Product category not found."):
+        UpdateProductCategoryService(db_session).execute(
+            999999,
+            UpdateProductCategoryInput(name="Shirts"),
+        )
+
+
 def test_list_and_get_product_category_services_return_dtos(db_session):
     category = CreateProductCategoryService(db_session).execute(
         CreateProductCategoryInput(name="Shirts")

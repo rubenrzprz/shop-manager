@@ -55,12 +55,12 @@ class UpdateProductCategoryService:
 
     def execute(self, category_id: int, data: UpdateProductCategoryInput) -> ProductCategory:
         CreateProductCategoryService._validate_category_input(data)
-        CreateProductCategoryService(self._session)._validate_unique_name(data.name, category_id)
-
         category = self._session.get(ProductCategory, category_id)
 
         if category is None:
             raise ValueError("Product category not found.")
+
+        CreateProductCategoryService(self._session)._validate_unique_name(data.name, category_id)
 
         category.name = data.name.strip()
         category.description = data.description
