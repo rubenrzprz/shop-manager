@@ -271,6 +271,7 @@ class ProductsPage(QWidget):
         self._table.setRowCount(len(products))
 
         for row, product in enumerate(products):
+            self._table.removeCellWidget(row, 1)
             base_price_text = "" if product.base_price is None else str(product.base_price)
             supplier_text = product.supplier_name or ""
             category_names = self._product_category_names(product)

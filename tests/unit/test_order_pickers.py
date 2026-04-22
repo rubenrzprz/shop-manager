@@ -61,6 +61,51 @@ def test_product_variant_picker_category_summary_keeps_table_compact():
     )
 
 
+def test_product_variant_picker_clears_stale_category_widgets():
+    dialog = ProductVariantPickerDialog.__new__(ProductVariantPickerDialog)
+
+    class FakeTable:
+        def __init__(self):
+            self.removed = []
+            self.widgets = []
+            self.rows = 0
+
+        def setRowCount(self, rows):
+            self.rows = rows
+
+        def removeCellWidget(self, row, column):
+            self.removed.append((row, column))
+
+        def setCellWidget(self, row, column, widget):
+            self.widgets.append((row, column, widget))
+
+        def setItem(self, _row, _column, _item):
+            pass
+
+    table = FakeTable()
+    dialog._table = table
+    variants = [
+        ProductVariantPickerItem(
+            id=1,
+            product_id=2,
+            product_name="Traditional Shirt",
+            sku="SHIRT-001",
+            size=None,
+            color=None,
+            variant_name=None,
+            price=Decimal("49.90"),
+            product_is_active=True,
+            variant_is_active=True,
+            category_names=[],
+        )
+    ]
+
+    ProductVariantPickerDialog._populate_table(dialog, variants)
+
+    assert table.removed == [(0, 1)]
+    assert table.widgets == []
+
+
 def test_products_page_category_summary_keeps_table_compact():
     assert ProductsPage._category_summary([]) == ""
     assert ProductsPage._category_summary(["Category C"]) == "Category C"

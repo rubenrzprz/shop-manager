@@ -127,6 +127,7 @@ class ProductVariantPickerDialog(QDialog):
         self._table.setRowCount(len(variants))
 
         for row, variant in enumerate(variants):
+            self._table.removeCellWidget(row, 1)
             is_active = variant.product_is_active and variant.variant_is_active
             status_text = t("Active") if is_active else t("Inactive")
             categories_text = "" if variant.category_names else self._category_summary(
