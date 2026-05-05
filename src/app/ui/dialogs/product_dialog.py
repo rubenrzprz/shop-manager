@@ -77,6 +77,7 @@ class ProductDialog(QDialog):
         self._create_variants: list[CreateProductVariantInput] = []
         self._variant_drafts: list[_VariantDraft] = []
         self._category_options: list[ProductCategoryOption] = []
+        self._category_options_loaded = False
         self._selected_category_ids: list[int] = []
 
         self.setWindowTitle(
@@ -421,8 +422,10 @@ class ProductDialog(QDialog):
 
         try:
             self._category_options = ListProductCategoryOptionsService(session).execute()
+            self._category_options_loaded = True
             self._populate_categories_table()
         except Exception as exc:
+            self._category_options_loaded = False
             QMessageBox.critical(self, t("Could not load categories"), t(str(exc)))
         finally:
             session.close()
@@ -523,6 +526,9 @@ class ProductDialog(QDialog):
         return item.data(Qt.UserRole)
 
     def _sync_selected_categories_from_list(self) -> None:
+        if not self._category_options_loaded and self._selected_category_ids:
+            return
+
         category_ids: list[int] = []
         for row in range(self._selected_categories_list.count()):
             item = self._selected_categories_list.item(row)

@@ -74,6 +74,7 @@ def test_add_variant_to_existing_product_stays_pending(monkeypatch):
 
 def test_product_dialog_category_selection_reads_draggable_list_order():
     dialog = ProductDialog.__new__(ProductDialog)
+    dialog._category_options_loaded = True
     dialog._selected_category_ids = []
 
     class FakeItem:
@@ -104,6 +105,27 @@ def test_product_dialog_category_selection_reads_draggable_list_order():
     ProductDialog._remove_category(dialog, 3)
 
     assert ProductDialog._selected_category_ids_from_table(dialog) == [1]
+
+
+def test_product_dialog_preserves_category_ids_when_options_are_unavailable():
+    dialog = ProductDialog.__new__(ProductDialog)
+    dialog._category_options_loaded = False
+    dialog._selected_category_ids = [3, 1]
+
+    class FakePlaceholderItem:
+        def data(self, _role):
+            return None
+
+    class FakeSelectedCategoryList:
+        def count(self):
+            return 1
+
+        def item(self, _row):
+            return FakePlaceholderItem()
+
+    dialog._selected_categories_list = FakeSelectedCategoryList()
+
+    assert ProductDialog._selected_category_ids_from_table(dialog) == [3, 1]
 
 
 def test_pending_variant_changes_are_applied_on_save(monkeypatch):
