@@ -1,6 +1,12 @@
 from decimal import Decimal
 
-from app.application.dto.products import CreateProductInput, CreateProductVariantInput
+from app.application.dto.product_categories import CreateProductCategoryInput
+from app.application.dto.products import (
+    CreateProductInput,
+    CreateProductVariantInput,
+    ProductListFilters,
+)
+from app.application.services.product_categories import CreateProductCategoryService
 from app.application.services.products import (
     CreateProductService,
     ListProductVariantPickerOptionsService,
@@ -75,6 +81,82 @@ def test_list_products_service_returns_empty_list_when_no_products_exist(db_sess
     products = list_service.execute()
 
     assert products == []
+
+
+def test_list_products_service_filters_by_category_and_uncategorized(db_session):
+    category_service = CreateProductCategoryService(db_session)
+    shirts = category_service.execute(CreateProductCategoryInput(name="Shirts"))
+    pants = category_service.execute(CreateProductCategoryInput(name="Pants"))
+    create_service = CreateProductService(db_session)
+    create_service.execute(
+        CreateProductInput(
+            name="Linen Shirt",
+            category_ids=[shirts.id],
+            variants=[CreateProductVariantInput(variant_name="Default")],
+        )
+    )
+    create_service.execute(
+        CreateProductInput(
+            name="Work Pants",
+            category_ids=[pants.id],
+            variants=[CreateProductVariantInput(variant_name="Default")],
+        )
+    )
+    create_service.execute(
+        CreateProductInput(
+            name="Gift Card",
+            variants=[CreateProductVariantInput(variant_name="Default")],
+        )
+    )
+
+    list_service = ListProductsService(db_session)
+
+    assert [
+        product.name
+        for product in list_service.execute(ProductListFilters(category_id=shirts.id))
+    ] == ["Linen Shirt"]
+    assert [
+        product.name
+        for product in list_service.execute(ProductListFilters(uncategorized_only=True))
+    ] == ["Gift Card"]
+
+
+def test_list_products_service_search_matches_product_supplier_variant_and_category(
+    db_session,
+):
+    supplier = Supplier(name="North Textiles")
+    db_session.add(supplier)
+    db_session.flush()
+    category = CreateProductCategoryService(db_session).execute(
+        CreateProductCategoryInput(name="Ceremony")
+    )
+    product = CreateProductService(db_session).execute(
+        CreateProductInput(
+            name="Linen Shirt",
+            supplier_id=supplier.id,
+            category_ids=[category.id],
+            variants=[
+                CreateProductVariantInput(
+                    sku="LINEN-BLUE-M",
+                    variant_name="Blue Medium",
+                    size="M",
+                    color="Blue",
+                )
+            ],
+        )
+    )
+    CreateProductService(db_session).execute(
+        CreateProductInput(
+            name="Work Pants",
+            variants=[CreateProductVariantInput(variant_name="Default")],
+        )
+    )
+
+    list_service = ListProductsService(db_session)
+
+    for query in ["linen", "north", "ceremony", "blue medium", "medium", "blue"]:
+        products = list_service.execute(ProductListFilters(search_text=query))
+        assert [listed_product.id for listed_product in products] == [product.id]
 
 
 def test_list_product_variant_picker_options_service_returns_variant_selection_data(db_session):

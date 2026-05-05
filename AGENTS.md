@@ -160,12 +160,14 @@ The project currently has these completed vertical slices:
 - Product Management v1
   - create products
   - list products
+  - search products by product/category/supplier/SKU/variant fields
   - edit product core fields/default variant
   - add/edit variants after product creation
   - activate/deactivate individual variants
   - activate/deactivate products
   - manage product categories
   - assign products to multiple categories
+  - filter products by assigned category or uncategorized products
   - product list shows assigned categories
   - searchable supplier picker in product dialog
 - Supplier Management v1
@@ -284,8 +286,8 @@ The project currently has these completed vertical slices:
 
 When asked to propose the next logical step, consider this order:
 
-1. Product category grouping/filtering
-   - group/filter the products page by category
+1. Product category grouping polish
+   - consider grouping the products page by category if filtering is not enough
    - consider category filters in product/variant pickers when order creation needs it
 2. Basic task reminders
    - add one-off task persistence, services, and tests

@@ -2,7 +2,7 @@ import re
 from decimal import Decimal
 
 import unicodedata
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session, selectinload, joinedload
 
 from app.application.dto.products import (
@@ -10,6 +10,7 @@ from app.application.dto.products import (
     ProductCategorySummary,
     CreateProductVariantInput,
     ProductEditItem,
+    ProductListFilters,
     ProductListItem,
     ProductVariantPickerItem,
     ProductVariantEditItem,
@@ -237,7 +238,7 @@ class ListProductsService:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def execute(self) -> list[ProductListItem]:
+    def execute(self, filters: ProductListFilters | None = None) -> list[ProductListItem]:
         statement = (
             select(Product)
             .options(
@@ -247,6 +248,8 @@ class ListProductsService:
             )
             .order_by(Product.id)
         )
+        filters = filters or ProductListFilters()
+        statement = self._apply_filters(statement, filters)
 
         products = self._session.scalars(statement).all()
 
@@ -285,6 +288,38 @@ class ListProductsService:
             )
 
         return result
+
+    @staticmethod
+    def _apply_filters(statement, filters: ProductListFilters):
+        if filters.category_id is not None and filters.uncategorized_only:
+            raise ValueError("Choose either a product category or uncategorized products.")
+
+        if filters.category_id is not None:
+            statement = statement.where(
+                Product.categories.any(ProductCategory.id == filters.category_id)
+            )
+        elif filters.uncategorized_only:
+            statement = statement.where(~Product.categories.any())
+
+        search_text = (filters.search_text or "").strip().lower()
+        if search_text:
+            search_pattern = f"%{search_text}%"
+            statement = statement.where(
+                or_(
+                    func.lower(Product.name).like(search_pattern),
+                    func.lower(Product.description).like(search_pattern),
+                    Product.supplier.has(func.lower(Supplier.name).like(search_pattern)),
+                    Product.categories.any(func.lower(ProductCategory.name).like(search_pattern)),
+                    Product.variants.any(func.lower(ProductVariant.sku).like(search_pattern)),
+                    Product.variants.any(
+                        func.lower(ProductVariant.variant_name).like(search_pattern)
+                    ),
+                    Product.variants.any(func.lower(ProductVariant.size).like(search_pattern)),
+                    Product.variants.any(func.lower(ProductVariant.color).like(search_pattern)),
+                )
+            )
+
+        return statement
 
     @staticmethod
     def _category_summaries(product: Product) -> list[ProductCategorySummary]:

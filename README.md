@@ -13,7 +13,7 @@ application services to keep business logic out of the interface layer.
 
 ## What It Does Today ✅
 
-- 📦 Products: create, list, edit, manage variants and categories, activate/deactivate
+- 📦 Products: create, list, edit, search/filter, manage variants and categories, activate/deactivate
 - 🤝 Suppliers: create, list, edit
 - 👥 Customers: create, list, edit
 - 🧾 Orders: create, edit, calculate totals, apply discounts, validate deadlines
@@ -157,8 +157,8 @@ SQLAlchemy models stay behind service boundaries.
 
 Near-term implementation path:
 
-1. Product category grouping and filtering
-   - group/filter the product table by assigned categories
+1. Product category browsing polish
+   - consider grouping the product table by assigned categories if filtering is not enough
    - consider category filters in order product/variant selection
 2. Basic tasks
    - create standalone reminders

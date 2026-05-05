@@ -115,6 +115,13 @@ class ProductVariantListItem:
 
 
 @dataclass(frozen=True)
+class ProductListFilters:
+    search_text: str | None = None
+    category_id: int | None = None
+    uncategorized_only: bool = False
+
+
+@dataclass(frozen=True)
 class ProductListItem:
     id: int
     supplier_id: int | None

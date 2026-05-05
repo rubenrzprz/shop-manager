@@ -2,9 +2,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QHeaderView,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QTableWidget,
@@ -13,7 +15,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.application.dto.products import ProductListItem
+from app.application.dto.product_categories import ProductCategoryOption
+from app.application.dto.products import ProductListFilters, ProductListItem
+from app.application.services.product_categories import ListProductCategoryOptionsService
 from app.application.services.products import (
     GetProductForEditService,
     ListProductsService,
@@ -27,12 +31,23 @@ from app.ui.localization import t
 from app.ui.widgets.category_summary_widget import CategorySummaryWidget, category_summary
 
 
+_UNCATEGORIZED_FILTER = "__uncategorized__"
+
+
 class ProductsPage(QWidget):
     def __init__(self) -> None:
         super().__init__()
 
+        self._category_options: list[ProductCategoryOption] = []
+
         self._title_label = QLabel()
         self._title_label.setObjectName("pageTitle")
+
+        self._search_input = QLineEdit()
+        self._search_input.textChanged.connect(self.load_products)
+
+        self._category_filter = QComboBox()
+        self._category_filter.currentIndexChanged.connect(self.load_products)
 
         self._create_button = QPushButton()
         self._create_button.clicked.connect(self.open_create_dialog)
@@ -47,7 +62,7 @@ class ProductsPage(QWidget):
         self._deactivate_button.clicked.connect(self.deactivate_selected_product)
 
         self._refresh_button = QPushButton()
-        self._refresh_button.clicked.connect(self.load_products)
+        self._refresh_button.clicked.connect(self.refresh_products)
 
         self._table = QTableWidget()
         self._table.setColumnCount(7)
@@ -69,6 +84,10 @@ class ProductsPage(QWidget):
         layout = QVBoxLayout()
         layout.addWidget(self._title_label)
 
+        filters_layout = QHBoxLayout()
+        filters_layout.addWidget(self._search_input, 1)
+        filters_layout.addWidget(self._category_filter)
+
         actions_layout = QHBoxLayout()
         actions_layout.addWidget(self._create_button)
         actions_layout.addWidget(self._edit_button)
@@ -77,16 +96,21 @@ class ProductsPage(QWidget):
         actions_layout.addWidget(self._refresh_button)
         actions_layout.addStretch()
 
+        layout.addLayout(filters_layout)
         layout.addLayout(actions_layout)
         layout.addWidget(self._table)
 
         self.setLayout(layout)
 
         self.retranslate_ui()
+        self._load_category_filter_options()
         self.load_products()
 
     def retranslate_ui(self) -> None:
         self._title_label.setText(t("Products"))
+        self._search_input.setPlaceholderText(
+            t("Search by product, category, supplier, SKU, variant, size, or color")
+        )
         self._create_button.setText(t("New Product"))
         self._edit_button.setText(t("Edit Product"))
         self._activate_button.setText(t("Activate Product"))
@@ -103,6 +127,7 @@ class ProductsPage(QWidget):
                 t("Variant Summary"),
             ]
         )
+        self._populate_category_filter(preserve_selection=True)
         self._refresh_table_text()
 
     def open_create_dialog(self) -> None:
@@ -219,7 +244,11 @@ class ProductsPage(QWidget):
 
         return dialog.selected_variant_ids
 
-    def load_products(self) -> None:
+    def refresh_products(self, *_args) -> None:
+        self._load_category_filter_options()
+        self.load_products()
+
+    def load_products(self, *_args) -> None:
         try:
             session = SessionLocal()
         except Exception as exc:
@@ -228,12 +257,57 @@ class ProductsPage(QWidget):
 
         try:
             service = ListProductsService(session)
-            products = service.execute()
+            products = service.execute(self._product_list_filters())
             self._populate_table(products)
         except Exception as exc:
             self._handle_load_products_error(exc)
         finally:
             session.close()
+
+    def _load_category_filter_options(self) -> None:
+        try:
+            session = SessionLocal()
+        except Exception as exc:
+            QMessageBox.critical(self, t("Could not load categories"), str(exc))
+            self._populate_category_filter(preserve_selection=True)
+            return
+
+        try:
+            self._category_options = ListProductCategoryOptionsService(session).execute()
+            self._populate_category_filter(preserve_selection=True)
+        except Exception as exc:
+            QMessageBox.critical(self, t("Could not load categories"), t(str(exc)))
+            self._populate_category_filter(preserve_selection=True)
+        finally:
+            session.close()
+
+    def _populate_category_filter(self, preserve_selection: bool) -> None:
+        selected_filter = self._selected_category_filter() if preserve_selection else None
+
+        self._category_filter.blockSignals(True)
+        self._category_filter.clear()
+        self._category_filter.addItem(t("All Categories"), None)
+        self._category_filter.addItem(t("Uncategorized"), _UNCATEGORIZED_FILTER)
+        for category in self._category_options:
+            self._category_filter.addItem(category.name, category.id)
+
+        if selected_filter is not None:
+            index = self._category_filter.findData(selected_filter)
+            if index >= 0:
+                self._category_filter.setCurrentIndex(index)
+
+        self._category_filter.blockSignals(False)
+
+    def _selected_category_filter(self) -> int | str | None:
+        return self._category_filter.currentData()
+
+    def _product_list_filters(self) -> ProductListFilters:
+        selected_category = self._selected_category_filter()
+        return ProductListFilters(
+            search_text=self._search_input.text(),
+            category_id=selected_category if isinstance(selected_category, int) else None,
+            uncategorized_only=selected_category == _UNCATEGORIZED_FILTER,
+        )
 
     def _handle_load_products_error(self, exc: Exception) -> None:
         self._table.setRowCount(0)
