@@ -1,11 +1,12 @@
 from decimal import Decimal
 
 from app.application.dto.customers import CustomerPickerItem
-from app.application.dto.products import ProductVariantPickerItem
+from app.application.dto.products import ProductListItem, ProductVariantPickerItem
 from app.domain.enums import CustomerType, DiscountType
 from app.ui.dialogs.order_dialog import OrderDialog, _OrderLineItem
 from app.ui.dialogs.customer_picker_dialog import CustomerPickerDialog
 from app.ui.dialogs.product_variant_picker_dialog import ProductVariantPickerDialog
+from app.ui.widgets.products_page import ProductsPage
 
 
 def test_customer_picker_filter_matches_name_company_tax_phone_and_email():
@@ -40,6 +41,7 @@ def test_product_variant_picker_filter_matches_product_sku_variant_size_and_colo
         price=Decimal("49.90"),
         product_is_active=True,
         variant_is_active=True,
+        category_names=["Shirts", "Ceremony"],
     )
 
     assert ProductVariantPickerDialog._matches_variant(variant, "traditional")
@@ -47,7 +49,111 @@ def test_product_variant_picker_filter_matches_product_sku_variant_size_and_colo
     assert ProductVariantPickerDialog._matches_variant(variant, "size m")
     assert ProductVariantPickerDialog._matches_variant(variant, "m")
     assert ProductVariantPickerDialog._matches_variant(variant, "white")
+    assert ProductVariantPickerDialog._matches_variant(variant, "ceremony")
     assert not ProductVariantPickerDialog._matches_variant(variant, "supplier")
+
+
+def test_product_variant_picker_category_summary_keeps_table_compact():
+    assert ProductVariantPickerDialog._category_summary([]) == ""
+    assert ProductVariantPickerDialog._category_summary(["Shirts"]) == "Shirts"
+    assert ProductVariantPickerDialog._category_summary(["Shirts", "Ceremony", "Sale"]) == (
+        "Shirts +2"
+    )
+
+
+def test_product_variant_picker_clears_stale_category_widgets():
+    dialog = ProductVariantPickerDialog.__new__(ProductVariantPickerDialog)
+
+    class FakeTable:
+        def __init__(self):
+            self.removed = []
+            self.widgets = []
+            self.rows = 0
+
+        def setRowCount(self, rows):
+            self.rows = rows
+
+        def removeCellWidget(self, row, column):
+            self.removed.append((row, column))
+
+        def setCellWidget(self, row, column, widget):
+            self.widgets.append((row, column, widget))
+
+        def setItem(self, _row, _column, _item):
+            pass
+
+    table = FakeTable()
+    dialog._table = table
+    variants = [
+        ProductVariantPickerItem(
+            id=1,
+            product_id=2,
+            product_name="Traditional Shirt",
+            sku="SHIRT-001",
+            size=None,
+            color=None,
+            variant_name=None,
+            price=Decimal("49.90"),
+            product_is_active=True,
+            variant_is_active=True,
+            category_names=[],
+        )
+    ]
+
+    ProductVariantPickerDialog._populate_table(dialog, variants)
+
+    assert table.removed == [(0, 1)]
+    assert table.widgets == []
+
+
+def test_products_page_category_summary_keeps_table_compact():
+    assert ProductsPage._category_summary([]) == ""
+    assert ProductsPage._category_summary(["Category C"]) == "Category C"
+    assert ProductsPage._category_summary(["Category C", "Category A", "Sale"]) == "Category C +2"
+
+
+def test_products_page_clears_stale_category_widgets():
+    page = ProductsPage.__new__(ProductsPage)
+
+    class FakeTable:
+        def __init__(self):
+            self.removed = []
+            self.widgets = []
+            self.rows = 0
+
+        def setRowCount(self, rows):
+            self.rows = rows
+
+        def removeCellWidget(self, row, column):
+            self.removed.append((row, column))
+
+        def setCellWidget(self, row, column, widget):
+            self.widgets.append((row, column, widget))
+
+        def setItem(self, _row, _column, _item):
+            pass
+
+    table = FakeTable()
+    page._table = table
+    products = [
+        ProductListItem(
+            id=1,
+            supplier_id=None,
+            supplier_name=None,
+            name="Traditional Shirt",
+            description=None,
+            base_price=Decimal("49.90"),
+            track_stock=False,
+            is_active=True,
+            categories=[],
+            variants=[],
+        )
+    ]
+
+    ProductsPage._populate_table(page, products)
+
+    assert table.removed == [(0, 1)]
+    assert table.widgets == []
 
 
 def test_order_dialog_unit_price_value_distinguishes_unset_from_explicit_zero():

@@ -37,7 +37,7 @@ class SuppliersPage(QWidget):
         self._refresh_button.clicked.connect(self.load_suppliers)
 
         self._table = QTableWidget()
-        self._table.setColumnCount(8)
+        self._table.setColumnCount(7)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -45,14 +45,13 @@ class SuppliersPage(QWidget):
         self._table.setAlternatingRowColors(True)
 
         header = self._table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
 
         layout = QVBoxLayout()
         layout.addWidget(self._title_label)
@@ -78,7 +77,6 @@ class SuppliersPage(QWidget):
         self._refresh_button.setText(t("Refresh"))
         self._table.setHorizontalHeaderLabels(
             [
-                t("ID"),
                 t("Name"),
                 t("Tax ID"),
                 t("Phone"),
@@ -140,7 +138,6 @@ class SuppliersPage(QWidget):
         for row, supplier in enumerate(suppliers):
             status_text = t("Active") if supplier.is_active else t("Inactive")
             items = [
-                QTableWidgetItem(str(supplier.id)),
                 QTableWidgetItem(supplier.name),
                 QTableWidgetItem(supplier.tax_id or ""),
                 QTableWidgetItem(supplier.phone or ""),
@@ -155,6 +152,8 @@ class SuppliersPage(QWidget):
                 if not supplier.is_active:
                     item.setForeground(QColor("#777777"))
                     item.setBackground(QColor("#f2f2f2"))
+
+            items[0].setData(Qt.UserRole, supplier.id)
 
             for column, item in enumerate(items):
                 self._table.setItem(row, column, item)
@@ -171,4 +170,4 @@ class SuppliersPage(QWidget):
         if id_item is None:
             return None
 
-        return int(id_item.text())
+        return id_item.data(Qt.UserRole)

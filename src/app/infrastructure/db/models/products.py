@@ -1,10 +1,40 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infrastructure.db.session import Base
+
+
+product_category_assignments = Table(
+    "product_category_assignments",
+    Base.metadata,
+    Column(
+        "product_id",
+        ForeignKey("products.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "category_id",
+        ForeignKey("product_categories.id", ondelete="RESTRICT"),
+        primary_key=True,
+    ),
+    Column("sort_order", Integer, nullable=False, default=0, server_default="0"),
+)
 
 
 class Product(Base):
@@ -65,6 +95,46 @@ class Product(Base):
         "ProductImage",
         back_populates="product",
         cascade="all, delete-orphan",
+    )
+    categories = relationship(
+        "ProductCategory",
+        secondary=product_category_assignments,
+        back_populates="products",
+        order_by=product_category_assignments.c.sort_order,
+    )
+
+
+class ProductCategory(Base):
+    __tablename__ = "product_categories"
+    __table_args__ = (
+        UniqueConstraint("name", name="uq_product_categories_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    products = relationship(
+        "Product",
+        secondary=product_category_assignments,
+        back_populates="categories",
     )
 
 

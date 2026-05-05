@@ -5,6 +5,7 @@ from app.infrastructure.db.session import SessionLocal
 from app.ui.localization import set_language, t
 from app.ui.widgets.customers_page import CustomersPage
 from app.ui.widgets.dashboard_page import DashboardPage
+from app.ui.widgets.product_categories_page import ProductCategoriesPage
 from app.ui.widgets.orders_page import OrdersPage
 from app.ui.widgets.products_page import ProductsPage
 from app.ui.widgets.settings_page import SettingsPage
@@ -22,6 +23,7 @@ class MainWindow(QMainWindow):
         self._tabs = QTabWidget()
         self._dashboard_page = DashboardPage()
         self._products_page = ProductsPage()
+        self._product_categories_page = ProductCategoriesPage()
         self._suppliers_page = SuppliersPage()
         self._customers_page = CustomersPage()
         self._orders_page = OrdersPage()
@@ -31,6 +33,7 @@ class MainWindow(QMainWindow):
 
         self._tabs.addTab(self._dashboard_page, "")
         self._tabs.addTab(self._products_page, "")
+        self._tabs.addTab(self._product_categories_page, "")
         self._tabs.addTab(self._suppliers_page, "")
         self._tabs.addTab(self._customers_page, "")
         self._tabs.addTab(self._orders_page, "")
@@ -43,24 +46,26 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(t("Shop Manager"))
         self._dashboard_page.retranslate_ui()
         self._products_page.retranslate_ui()
+        self._product_categories_page.retranslate_ui()
         self._suppliers_page.retranslate_ui()
         self._customers_page.retranslate_ui()
         self._orders_page.retranslate_ui()
         self._settings_page.retranslate_ui()
         self._tabs.setTabText(0, t("Dashboard"))
         self._tabs.setTabText(1, t("Products"))
-        self._tabs.setTabText(2, t("Suppliers"))
-        self._tabs.setTabText(3, t("Customers"))
-        self._tabs.setTabText(4, t("Orders"))
-        self._tabs.setTabText(5, t("Settings"))
+        self._tabs.setTabText(2, t("Categories"))
+        self._tabs.setTabText(3, t("Suppliers"))
+        self._tabs.setTabText(4, t("Customers"))
+        self._tabs.setTabText(5, t("Orders"))
+        self._tabs.setTabText(6, t("Settings"))
 
     def _run_dashboard_action(self, action: str) -> None:
         actions = {
             "new_product": (1, self._products_page.open_create_dialog),
-            "new_supplier": (2, self._suppliers_page.open_create_dialog),
-            "new_customer": (3, self._customers_page.open_create_dialog),
-            "new_order": (4, self._orders_page.open_create_dialog),
-            "settings": (5, None),
+            "new_supplier": (3, self._suppliers_page.open_create_dialog),
+            "new_customer": (4, self._customers_page.open_create_dialog),
+            "new_order": (5, self._orders_page.open_create_dialog),
+            "settings": (6, None),
         }
         action_config = actions.get(action)
         if action_config is None:

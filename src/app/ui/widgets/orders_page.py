@@ -56,7 +56,7 @@ class OrdersPage(QWidget):
         self._refresh_button.clicked.connect(self.load_orders)
 
         self._table = QTableWidget()
-        self._table.setColumnCount(8)
+        self._table.setColumnCount(7)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -65,13 +65,12 @@ class OrdersPage(QWidget):
 
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
 
         layout = QVBoxLayout()
         layout.addWidget(self._title_label)
@@ -103,7 +102,6 @@ class OrdersPage(QWidget):
         self._refresh_button.setText(t("Refresh"))
         self._table.setHorizontalHeaderLabels(
             [
-                t("ID"),
                 t("Order #"),
                 t("Customer"),
                 t("Status"),
@@ -327,7 +325,6 @@ class OrdersPage(QWidget):
 
         for row, order in enumerate(orders):
             items = [
-                QTableWidgetItem(str(order.id)),
                 QTableWidgetItem(order.order_number),
                 QTableWidgetItem(order.customer_name),
                 QTableWidgetItem(order_status_label(order.status)),
@@ -340,6 +337,8 @@ class OrdersPage(QWidget):
             for item in items:
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
 
+            items[0].setData(Qt.UserRole, order.id)
+
             for column, item in enumerate(items):
                 self._table.setItem(row, column, item)
 
@@ -349,6 +348,10 @@ class OrdersPage(QWidget):
             return None
 
         row = selected_items[0].row()
-        order_id = int(self._table.item(row, 0).text())
+        id_item = self._table.item(row, 0)
+        if id_item is None:
+            return None
+
+        order_id = id_item.data(Qt.UserRole)
 
         return self._orders_by_id.get(order_id)

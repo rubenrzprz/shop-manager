@@ -23,6 +23,15 @@ def main() -> None:
             gridline-color: #d0d0d0;
         }
 
+        QHeaderView::section {
+            background-color: #f3f4f6;
+            border: 0;
+            border-bottom: 1px solid #c8cdd3;
+            border-right: 1px solid #d9dde2;
+            font-weight: 600;
+            padding: 6px 8px;
+        }
+
         QPushButton {
             min-height: 30px;
             padding: 4px 10px;

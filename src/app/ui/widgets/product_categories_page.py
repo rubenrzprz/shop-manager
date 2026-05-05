@@ -13,14 +13,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.application.dto.customers import CustomerListItem
-from app.application.services.customers import ListCustomersService
+from app.application.dto.product_categories import ProductCategoryListItem
+from app.application.services.product_categories import ListProductCategoriesService
 from app.infrastructure.db.session import SessionLocal
-from app.ui.dialogs.customer_dialog import CustomerDialog
+from app.ui.dialogs.product_category_dialog import ProductCategoryDialog
 from app.ui.localization import t
 
 
-class CustomersPage(QWidget):
+class ProductCategoriesPage(QWidget):
     def __init__(self) -> None:
         super().__init__()
 
@@ -34,10 +34,10 @@ class CustomersPage(QWidget):
         self._edit_button.clicked.connect(self.open_edit_dialog)
 
         self._refresh_button = QPushButton()
-        self._refresh_button.clicked.connect(self.load_customers)
+        self._refresh_button.clicked.connect(self.load_categories)
 
         self._table = QTableWidget()
-        self._table.setColumnCount(8)
+        self._table.setColumnCount(3)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -45,14 +45,9 @@ class CustomersPage(QWidget):
         self._table.setAlternatingRowColors(True)
 
         header = self._table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.Stretch)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
 
         layout = QVBoxLayout()
         layout.addWidget(self._title_label)
@@ -65,112 +60,93 @@ class CustomersPage(QWidget):
 
         layout.addLayout(actions_layout)
         layout.addWidget(self._table)
-
         self.setLayout(layout)
 
         self.retranslate_ui()
-        self.load_customers()
+        self.load_categories()
 
     def retranslate_ui(self) -> None:
-        self._title_label.setText(t("Customers"))
-        self._create_button.setText(t("New Customer"))
-        self._edit_button.setText(t("Edit Customer"))
+        self._title_label.setText(t("Product Categories"))
+        self._create_button.setText(t("New Category"))
+        self._edit_button.setText(t("Edit Category"))
         self._refresh_button.setText(t("Refresh"))
         self._table.setHorizontalHeaderLabels(
             [
-                t("Type"),
                 t("Name"),
-                t("Company"),
-                t("Tax ID"),
-                t("Phone"),
-                t("Email"),
-                t("City"),
+                t("Description"),
                 t("Status"),
             ]
         )
         if self._table.rowCount() > 0:
-            self.load_customers()
+            self.load_categories()
 
     def open_create_dialog(self) -> None:
-        dialog = CustomerDialog(self)
+        dialog = ProductCategoryDialog(self)
         if dialog.exec():
-            self.load_customers()
+            self.load_categories()
 
     def open_edit_dialog(self) -> None:
-        customer_id = self._selected_customer_id()
-
-        if customer_id is None:
+        category_id = self._selected_category_id()
+        if category_id is None:
             QMessageBox.information(
                 self,
-                t("No customer selected"),
-                t("Select a customer to edit."),
+                t("No category selected"),
+                t("Select a category to edit."),
             )
             return
 
-        dialog = CustomerDialog(self, customer_id=customer_id)
+        dialog = ProductCategoryDialog(self, category_id=category_id)
         if dialog.exec():
-            self.load_customers()
+            self.load_categories()
 
-    def load_customers(self) -> None:
+    def load_categories(self) -> None:
         try:
             session = SessionLocal()
         except Exception as exc:
-            self._handle_load_customers_error(exc)
+            self._handle_load_categories_error(exc)
             return
 
         try:
-            customers = ListCustomersService(session).execute()
-            self._populate_table(customers)
+            categories = ListProductCategoriesService(session).execute()
+            self._populate_table(categories)
         except Exception as exc:
-            self._handle_load_customers_error(exc)
+            self._handle_load_categories_error(exc)
         finally:
             session.close()
 
-    def _handle_load_customers_error(self, exc: Exception) -> None:
+    def _handle_load_categories_error(self, exc: Exception) -> None:
         self._table.setRowCount(0)
-        QMessageBox.critical(
-            self,
-            t("Could not load customers"),
-            str(exc),
-        )
+        QMessageBox.critical(self, t("Could not load categories"), str(exc))
 
-    def _populate_table(self, customers: list[CustomerListItem]) -> None:
-        self._table.setRowCount(len(customers))
+    def _populate_table(self, categories: list[ProductCategoryListItem]) -> None:
+        self._table.setRowCount(len(categories))
 
-        for row, customer in enumerate(customers):
-            status_text = t("Active") if customer.is_active else t("Inactive")
-            customer_type_text = t(customer.customer_type.value.title())
+        for row, category in enumerate(categories):
+            status_text = t("Active") if category.is_active else t("Inactive")
             items = [
-                QTableWidgetItem(customer_type_text),
-                QTableWidgetItem(customer.name),
-                QTableWidgetItem(customer.company_name or ""),
-                QTableWidgetItem(customer.tax_id or ""),
-                QTableWidgetItem(customer.phone or ""),
-                QTableWidgetItem(customer.email or ""),
-                QTableWidgetItem(customer.city or ""),
+                QTableWidgetItem(category.name),
+                QTableWidgetItem(category.description or ""),
                 QTableWidgetItem(status_text),
             ]
 
             for item in items:
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                if not customer.is_active:
+                if not category.is_active:
                     item.setForeground(QColor("#777777"))
                     item.setBackground(QColor("#f2f2f2"))
 
-            items[0].setData(Qt.UserRole, customer.id)
+            items[0].setData(Qt.UserRole, category.id)
 
             for column, item in enumerate(items):
                 self._table.setItem(row, column, item)
 
-    def _selected_customer_id(self) -> int | None:
+    def _selected_category_id(self) -> int | None:
         selected_items = self._table.selectedItems()
-
         if not selected_items:
             return None
 
         row = selected_items[0].row()
         id_item = self._table.item(row, 0)
-
         if id_item is None:
             return None
 

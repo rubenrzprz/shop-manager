@@ -18,6 +18,7 @@ from app.application.services.products import ListProductVariantPickerOptionsSer
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialog_helpers import translate_button_box
 from app.ui.localization import t
+from app.ui.widgets.category_summary_widget import CategorySummaryWidget, category_summary
 
 
 class ProductVariantPickerDialog(QDialog):
@@ -31,15 +32,17 @@ class ProductVariantPickerDialog(QDialog):
         self.resize(840, 460)
 
         self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText(t("Search by product, SKU, variant, size, or color"))
+        self._search_input.setPlaceholderText(
+            t("Search by product, category, SKU, variant, size, or color")
+        )
         self._search_input.textChanged.connect(self._apply_filter)
 
         self._table = QTableWidget()
         self._table.setColumnCount(8)
         self._table.setHorizontalHeaderLabels(
             [
-                t("ID"),
                 t("Product"),
+                t("Categories"),
                 "SKU",
                 t("Variant"),
                 t("Size"),
@@ -56,10 +59,10 @@ class ProductVariantPickerDialog(QDialog):
         self._table.doubleClicked.connect(self._accept_selected_variant)
 
         header = self._table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
@@ -115,6 +118,7 @@ class ProductVariantPickerDialog(QDialog):
             variant.variant_name,
             variant.size,
             variant.color,
+            " ".join(variant.category_names),
         ]
 
         return any(query in (field or "").lower() for field in fields)
@@ -123,11 +127,15 @@ class ProductVariantPickerDialog(QDialog):
         self._table.setRowCount(len(variants))
 
         for row, variant in enumerate(variants):
+            self._table.removeCellWidget(row, 1)
             is_active = variant.product_is_active and variant.variant_is_active
             status_text = t("Active") if is_active else t("Inactive")
+            categories_text = "" if variant.category_names else self._category_summary(
+                variant.category_names
+            )
             items = [
-                QTableWidgetItem(str(variant.id)),
                 QTableWidgetItem(variant.product_name),
+                QTableWidgetItem(categories_text),
                 QTableWidgetItem(variant.sku),
                 QTableWidgetItem(variant.variant_name or ""),
                 QTableWidgetItem(variant.size or ""),
@@ -145,6 +153,13 @@ class ProductVariantPickerDialog(QDialog):
 
             for column, item in enumerate(items):
                 self._table.setItem(row, column, item)
+
+            if variant.category_names:
+                self._table.setCellWidget(
+                    row,
+                    1,
+                    CategorySummaryWidget(variant.category_names, self._table),
+                )
 
     def _accept_selected_variant(self) -> None:
         variant = self._selected_table_variant()
@@ -173,3 +188,7 @@ class ProductVariantPickerDialog(QDialog):
             return None
 
         return selected_items[0].data(Qt.UserRole)
+
+    @staticmethod
+    def _category_summary(category_names: list[str]) -> str:
+        return category_summary(category_names)
