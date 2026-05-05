@@ -159,6 +159,44 @@ def test_list_products_service_search_matches_product_supplier_variant_and_categ
         assert [listed_product.id for listed_product in products] == [product.id]
 
 
+def test_list_products_service_search_treats_like_wildcards_as_literals(db_session):
+    create_service = CreateProductService(db_session)
+    literal_underscore_product = create_service.execute(
+        CreateProductInput(
+            name="Literal Underscore",
+            variants=[CreateProductVariantInput(sku="ABC_123", variant_name="Default")],
+        )
+    )
+    create_service.execute(
+        CreateProductInput(
+            name="Wildcard Candidate",
+            variants=[CreateProductVariantInput(sku="ABCX123", variant_name="Default")],
+        )
+    )
+    literal_percent_product = create_service.execute(
+        CreateProductInput(
+            name="Ten Percent Discount",
+            variants=[CreateProductVariantInput(variant_name="10% off")],
+        )
+    )
+    create_service.execute(
+        CreateProductInput(
+            name="Ten Points Discount",
+            variants=[CreateProductVariantInput(variant_name="10 points off")],
+        )
+    )
+
+    list_service = ListProductsService(db_session)
+
+    assert [
+        product.id
+        for product in list_service.execute(ProductListFilters(search_text="abc_123"))
+    ] == [literal_underscore_product.id]
+    assert [
+        product.id for product in list_service.execute(ProductListFilters(search_text="%"))
+    ] == [literal_percent_product.id]
+
+
 def test_list_product_variant_picker_options_service_returns_variant_selection_data(db_session):
     product = CreateProductService(db_session).execute(
         CreateProductInput(

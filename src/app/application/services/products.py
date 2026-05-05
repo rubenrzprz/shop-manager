@@ -303,23 +303,40 @@ class ListProductsService:
 
         search_text = (filters.search_text or "").strip().lower()
         if search_text:
-            search_pattern = f"%{search_text}%"
+            search_pattern = f"%{ListProductsService._escape_like(search_text)}%"
             statement = statement.where(
                 or_(
-                    func.lower(Product.name).like(search_pattern),
-                    func.lower(Product.description).like(search_pattern),
-                    Product.supplier.has(func.lower(Supplier.name).like(search_pattern)),
-                    Product.categories.any(func.lower(ProductCategory.name).like(search_pattern)),
-                    Product.variants.any(func.lower(ProductVariant.sku).like(search_pattern)),
-                    Product.variants.any(
-                        func.lower(ProductVariant.variant_name).like(search_pattern)
+                    func.lower(Product.name).like(search_pattern, escape="\\"),
+                    func.lower(Product.description).like(search_pattern, escape="\\"),
+                    Product.supplier.has(
+                        func.lower(Supplier.name).like(search_pattern, escape="\\")
                     ),
-                    Product.variants.any(func.lower(ProductVariant.size).like(search_pattern)),
-                    Product.variants.any(func.lower(ProductVariant.color).like(search_pattern)),
+                    Product.categories.any(
+                        func.lower(ProductCategory.name).like(search_pattern, escape="\\")
+                    ),
+                    Product.variants.any(
+                        func.lower(ProductVariant.sku).like(search_pattern, escape="\\")
+                    ),
+                    Product.variants.any(
+                        func.lower(ProductVariant.variant_name).like(
+                            search_pattern,
+                            escape="\\",
+                        )
+                    ),
+                    Product.variants.any(
+                        func.lower(ProductVariant.size).like(search_pattern, escape="\\")
+                    ),
+                    Product.variants.any(
+                        func.lower(ProductVariant.color).like(search_pattern, escape="\\")
+                    ),
                 )
             )
 
         return statement
+
+    @staticmethod
+    def _escape_like(value: str) -> str:
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     @staticmethod
     def _category_summaries(product: Product) -> list[ProductCategorySummary]:
