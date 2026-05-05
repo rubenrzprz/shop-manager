@@ -76,6 +76,8 @@ _TRANSLATIONS = {
         "Available Categories": "Categorías disponibles",
         "Add Category": "Añadir categoría",
         "No categories selected": "Sin categorías seleccionadas",
+        "All Categories": "Todas las categorías",
+        "Uncategorized": "Sin categoría",
         "Tax ID": "NIF/CIF",
         "Phone": "Teléfono",
         "Email": "Email",
@@ -245,6 +247,9 @@ _TRANSLATIONS = {
         ),
         "Search by product, category, SKU, variant, size, or color": (
             "Buscar por producto, categoría, SKU, variante, talla o color"
+        ),
+        "Search by product, category, supplier, SKU, variant, size, or color": (
+            "Buscar por producto, categoría, proveedor, SKU, variante, talla o color"
         ),
         "No order selected": "Ningún pedido seleccionado",
         "Select an active order to edit.": "Selecciona un pedido activo para editar.",
