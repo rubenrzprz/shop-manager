@@ -18,15 +18,16 @@ application services to keep business logic out of the interface layer.
 - 👥 Customers: create, list, edit
 - 🧾 Orders: create, edit, calculate totals, apply discounts, validate deadlines
 - 🔁 Order workflows: configurable statuses, advance/revert/cancel/recover actions
+- ✅ Tasks: create one-off reminders, list daily tasks, complete and reopen tasks
 - ⚙️ Settings: typed application settings backed by the database
 - 🌐 Localization: English and Spanish UI labels/messages
-- 🏠 Dashboard shell: entry tab with quick actions and daily task empty states
+- 🏠 Dashboard shell: entry tab with quick actions and daily task reminders
 
 ## What Is Coming 🧭
 
-- ✅ Standalone tasks and order-linked reminders
-- 🏷️ Product category grouping and filtering
 - 🔁 Recurring task generation through a configurable planning horizon
+- ✅ Order-linked reminders
+- 🏷️ Product category grouping polish
 - 📅 Calendar-based task planning
 - 📦 Stock movements
 - 🚚 Shipment workflows
@@ -157,23 +158,19 @@ SQLAlchemy models stay behind service boundaries.
 
 Near-term implementation path:
 
-1. Product category browsing polish
-   - consider grouping the product table by assigned categories if filtering is not enough
-   - consider category filters in order product/variant selection
-2. Basic tasks
-   - create standalone reminders
-   - list tasks due today
-   - complete and reopen tasks
-3. Recurring task generation
+1. Recurring task generation
    - store task series separately from generated task occurrences
    - generate missing occurrences through a configurable planning horizon
-4. Order follow-up reminders
+2. Order follow-up reminders
    - add configurable default order follow-up days
    - generate reminders for active orders that need review
-5. Calendar view
+3. Calendar view
    - browse tasks by date
    - create reminders directly for selected days
-6. Stock and shipment workflows
+4. Product category browsing polish
+   - consider grouping the product table by assigned categories if filtering is not enough
+   - consider category filters in order product/variant selection
+5. Stock and shipment workflows
 
 See [docs/dashboard_tasks_roadmap.md](docs/dashboard_tasks_roadmap.md) for the dashboard and
 reminder design.

@@ -4,6 +4,7 @@ from app.infrastructure.db.models.products import Product, ProductCategory, Prod
 from app.infrastructure.db.models.settings import ApplicationSetting
 from app.infrastructure.db.models.stock import StockMovement
 from app.infrastructure.db.models.suppliers import Supplier, SupplierContact
+from app.infrastructure.db.models.tasks import Task
 
 __all__ = [
     "Customer",
@@ -19,4 +20,5 @@ __all__ = [
     "OrderLine",
     "OrderSupplier",
     "StockMovement",
+    "Task",
 ]
