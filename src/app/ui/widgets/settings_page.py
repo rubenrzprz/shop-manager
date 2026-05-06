@@ -7,11 +7,16 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
-from app.application.services.settings import ApplicationSettingsService
+from app.application.services.settings import (
+    MAX_TASK_GENERATION_HORIZON_DAYS,
+    MIN_TASK_GENERATION_HORIZON_DAYS,
+    ApplicationSettingsService,
+)
 from app.domain.enums import OrderStatus
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialog_helpers import question
@@ -32,6 +37,15 @@ class SettingsPage(QWidget):
             self._language_input.addItem(language_name, language_code)
 
         self._language_label = QLabel()
+        self._task_generation_horizon_label = QLabel()
+        self._task_generation_horizon_input = QSpinBox()
+        self._task_generation_horizon_input.setRange(
+            MIN_TASK_GENERATION_HORIZON_DAYS,
+            MAX_TASK_GENERATION_HORIZON_DAYS,
+        )
+        self._task_generation_horizon_input.setSuffix(" days")
+        self._task_generation_horizon_description = QLabel()
+        self._task_generation_horizon_description.setWordWrap(True)
         self._strict_order_workflow_checkbox = QCheckBox()
         self._strict_order_workflow_description = QLabel()
         self._strict_order_workflow_description.setWordWrap(True)
@@ -63,10 +77,15 @@ class SettingsPage(QWidget):
 
         self._form = QFormLayout()
         self._form.addRow(self._language_label, self._language_input)
+        self._form.addRow(
+            self._task_generation_horizon_label,
+            self._task_generation_horizon_input,
+        )
 
         layout = QVBoxLayout()
         layout.addWidget(self._title_label)
         layout.addLayout(self._form)
+        layout.addWidget(self._task_generation_horizon_description)
         layout.addWidget(self._strict_order_workflow_checkbox)
         layout.addWidget(self._strict_order_workflow_description)
         layout.addWidget(self._order_status_group)
@@ -80,6 +99,11 @@ class SettingsPage(QWidget):
     def retranslate_ui(self) -> None:
         self._title_label.setText(t("Settings"))
         self._language_label.setText(t("Language"))
+        self._task_generation_horizon_label.setText(t("Task generation horizon"))
+        self._task_generation_horizon_input.setSuffix(f" {t('days')}")
+        self._task_generation_horizon_description.setText(
+            t("Recurring task occurrences are generated this many days ahead.")
+        )
         for index in range(self._language_input.count()):
             language_code = self._language_input.itemData(index)
             language_name = "Spanish" if language_code == "es" else "English"
@@ -115,6 +139,7 @@ class SettingsPage(QWidget):
             if language_index >= 0:
                 self._language_input.setCurrentIndex(language_index)
             self._strict_order_workflow_checkbox.setChecked(settings.strict_order_workflow_enabled)
+            self._task_generation_horizon_input.setValue(settings.task_generation_horizon_days)
             for status, checkbox in self._order_status_checkboxes.items():
                 checkbox.setChecked(status in settings.enabled_order_statuses)
         except Exception as exc:
@@ -145,6 +170,7 @@ class SettingsPage(QWidget):
             service.set_strict_order_workflow_enabled(
                 self._strict_order_workflow_checkbox.isChecked()
             )
+            service.set_task_generation_horizon_days(self._task_generation_horizon_input.value())
             service.set_enabled_order_statuses(enabled_order_statuses)
             session.commit()
             set_language(selected_language)
