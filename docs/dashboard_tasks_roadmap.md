@@ -39,12 +39,11 @@ Future dashboard sections may include stock alerts, recent orders, or shipment a
 Use tasks as the persisted concept. "Daily events" should be the dashboard/calendar view of tasks
 due on a selected date.
 
-Planned model split:
+Implemented model split:
 
 - `TaskSeries`
   - title
   - notes
-  - optional `order_id`
   - recurrence type
   - recurrence interval
   - starts on
@@ -52,7 +51,6 @@ Planned model split:
   - active flag
 - `Task`
   - optional `task_series_id`
-  - optional `order_id`
   - title snapshot
   - notes snapshot
   - due date
@@ -65,25 +63,28 @@ stable even if the series is edited later.
 
 ## Recurring Task Generation
 
-Recurring tasks should be generated within a bounded planning window instead of infinitely.
+Recurring tasks are generated within a bounded planning window instead of infinitely.
 
-Planned setting:
+Implemented setting:
 
 - `task_generation_horizon_days`
 - default: `90`
-- likely allowed range: `30` to `365`
+- allowed range: `30` to `365`
 
 Startup behavior:
 
 1. Load application settings.
 2. Compute `generation_until = today + task_generation_horizon_days`.
 3. Find active task series.
-4. Generate missing occurrences through `generation_until`.
+4. Generate missing occurrences from today through `generation_until`.
 5. Commit before loading the dashboard task list.
 
 The generation service must be idempotent. Running it repeatedly must not create duplicate tasks.
 
 Use a uniqueness rule equivalent to one generated task per `task_series_id` and `due_date`.
+
+Daily, weekly, and monthly recurrence intervals are implemented. Creating and editing recurring
+series from the UI remains a later workflow.
 
 ## Order Follow-Up Reminders
 
@@ -139,10 +140,8 @@ Later options:
    - completed create/list/complete/reopen one-off tasks
    - completed dashboard lists overdue, pending, and completed tasks
 5. Task series generation
-   - task series table
-   - recurrence fields
-   - `task_generation_horizon_days`
-   - startup generation service
+   - completed with task series table, recurrence fields, `task_generation_horizon_days`, and
+     startup generation service
 6. Order-bound tasks
    - optional `order_id`
    - create custom reminders from orders
