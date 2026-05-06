@@ -128,6 +128,37 @@ def test_application_settings_service_saves_strict_order_workflow(db_session):
     assert not ApplicationSettingsService(db_session).strict_order_workflow_enabled()
 
 
+def test_application_settings_service_defaults_task_generation_horizon_days(db_session):
+    settings = ApplicationSettingsService(db_session).get_settings()
+
+    assert settings.task_generation_horizon_days == 90
+
+
+def test_application_settings_service_saves_task_generation_horizon_days(db_session):
+    service = ApplicationSettingsService(db_session)
+
+    service.set_task_generation_horizon_days(120)
+    db_session.commit()
+
+    assert ApplicationSettingsService(db_session).task_generation_horizon_days() == 120
+
+
+def test_application_settings_service_validates_task_generation_horizon_days(db_session):
+    service = ApplicationSettingsService(db_session)
+
+    with pytest.raises(
+        ValueError,
+        match="Task generation horizon days must be between 30 and 365.",
+    ):
+        service.set_task_generation_horizon_days(29)
+
+    with pytest.raises(
+        ValueError,
+        match="Task generation horizon days must be between 30 and 365.",
+    ):
+        service.set_task_generation_horizon_days(366)
+
+
 def test_application_settings_service_defaults_app_language_to_english(db_session):
     settings = ApplicationSettingsService(db_session).get_settings()
 
