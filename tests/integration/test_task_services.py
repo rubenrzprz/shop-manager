@@ -178,6 +178,32 @@ def test_generate_recurring_tasks_service_respects_horizon_and_inactive_series(
     assert inactive_tasks == []
 
 
+def test_generate_recurring_tasks_service_preserves_monthly_anchor_after_short_month(
+    db_session,
+):
+    series = CreateTaskSeriesService(db_session).execute(
+        CreateTaskSeriesInput(
+            title="Month end review",
+            recurrence_type=TaskRecurrenceType.MONTHLY,
+            starts_on=date(2026, 1, 31),
+            ends_on=date(2026, 4, 30),
+        )
+    )
+
+    created_count = GenerateRecurringTasksService(db_session).execute(date(2026, 1, 31))
+
+    tasks = db_session.scalars(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    ).all()
+    assert created_count == 4
+    assert [task.due_date for task in tasks] == [
+        date(2026, 1, 31),
+        date(2026, 2, 28),
+        date(2026, 3, 31),
+        date(2026, 4, 30),
+    ]
+
+
 def test_dashboard_tasks_service_groups_overdue_pending_and_completed_today(db_session):
     today = date(2026, 5, 5)
     service = CreateTaskService(db_session)

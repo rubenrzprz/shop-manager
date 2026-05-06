@@ -71,3 +71,4 @@ def downgrade() -> None:
     op.drop_constraint("fk_tasks_task_series_id_task_series", "tasks", type_="foreignkey")
     op.drop_column("tasks", "task_series_id")
     op.drop_table("task_series")
+    task_recurrence_type_enum.drop(op.get_bind(), checkfirst=True)

@@ -226,6 +226,7 @@ def _iter_occurrence_dates(
     generation_until: date,
 ) -> list[date]:
     occurrence_dates: list[date] = []
+    occurrence_index = 0
     current_date = series.starts_on
     generation_end = min(
         generation_until,
@@ -235,25 +236,28 @@ def _iter_occurrence_dates(
         if current_date >= generation_start:
             occurrence_dates.append(current_date)
         current_date = _next_occurrence_date(
-            current_date,
+            series.starts_on,
             series.recurrence_type,
             series.recurrence_interval,
+            occurrence_index + 1,
         )
+        occurrence_index += 1
 
     return occurrence_dates
 
 
 def _next_occurrence_date(
-    current_date: date,
+    starts_on: date,
     recurrence_type: TaskRecurrenceType,
     interval: int,
+    occurrence_index: int,
 ) -> date:
     if recurrence_type == TaskRecurrenceType.DAILY:
-        return current_date + timedelta(days=interval)
+        return starts_on + timedelta(days=interval * occurrence_index)
     if recurrence_type == TaskRecurrenceType.WEEKLY:
-        return current_date + timedelta(weeks=interval)
+        return starts_on + timedelta(weeks=interval * occurrence_index)
     if recurrence_type == TaskRecurrenceType.MONTHLY:
-        return _add_months(current_date, interval)
+        return _add_months(starts_on, interval * occurrence_index)
 
     raise ValueError("Task recurrence type is unsupported.")
 
