@@ -11,6 +11,9 @@ from app.infrastructure.db.models.settings import ApplicationSetting
 STRICT_ORDER_WORKFLOW_ENABLED_KEY = "strict_order_workflow_enabled"
 APP_LANGUAGE_KEY = "app_language"
 ENABLED_ORDER_STATUSES_KEY = "enabled_order_statuses"
+TASK_GENERATION_HORIZON_DAYS_KEY = "task_generation_horizon_days"
+MIN_TASK_GENERATION_HORIZON_DAYS = 30
+MAX_TASK_GENERATION_HORIZON_DAYS = 365
 SUPPORTED_APP_LANGUAGES = {"en", "es"}
 ORDER_STATUS_WORKFLOW = (
     OrderStatus.DRAFT,
@@ -38,6 +41,7 @@ class ApplicationSettingsService:
         return ApplicationSettingsItem(
             strict_order_workflow_enabled=self.strict_order_workflow_enabled(),
             app_language=self.app_language(),
+            task_generation_horizon_days=self.task_generation_horizon_days(),
             enabled_order_statuses=self.enabled_order_statuses(),
         )
 
@@ -46,6 +50,17 @@ class ApplicationSettingsService:
 
     def app_language(self) -> str:
         return self._get_string(APP_LANGUAGE_KEY, default="en")
+
+    def task_generation_horizon_days(self) -> int:
+        return self._get_int(TASK_GENERATION_HORIZON_DAYS_KEY, default=90)
+
+    def set_task_generation_horizon_days(self, value: int) -> None:
+        self._validate_task_generation_horizon_days(value)
+        self._set_int(
+            TASK_GENERATION_HORIZON_DAYS_KEY,
+            value,
+            "Number of future days generated for recurring task occurrences.",
+        )
 
     def set_app_language(self, value: str) -> None:
         normalized_value = value.strip().lower()
@@ -135,6 +150,21 @@ class ApplicationSettingsService:
 
         return setting.value
 
+    def _get_int(self, key: str, *, default: int) -> int:
+        setting = self._session.get(ApplicationSetting, key)
+        if setting is None:
+            value = default
+        else:
+            try:
+                value = int(setting.value)
+            except ValueError as exc:
+                raise ValueError(f"Application setting {key} must be an integer.") from exc
+
+        if key == TASK_GENERATION_HORIZON_DAYS_KEY:
+            self._validate_task_generation_horizon_days(value)
+
+        return value
+
     def _get_json_list(self, key: str, *, default: list[str]) -> list[str]:
         setting = self._session.get(ApplicationSetting, key)
         if setting is None:
@@ -187,6 +217,25 @@ class ApplicationSettingsService:
         setting.value_type = "string"
         setting.description = description
 
+    def _set_int(self, key: str, value: int, description: str) -> None:
+        setting = self._session.get(ApplicationSetting, key)
+        serialized_value = str(value)
+
+        if setting is None:
+            self._session.add(
+                ApplicationSetting(
+                    key=key,
+                    value=serialized_value,
+                    value_type="int",
+                    description=description,
+                )
+            )
+            return
+
+        setting.value = serialized_value
+        setting.value_type = "int"
+        setting.description = description
+
     def _set_json_list(self, key: str, value: list[str], description: str) -> None:
         setting = self._session.get(ApplicationSetting, key)
         serialized_value = json.dumps(value)
@@ -225,6 +274,15 @@ class ApplicationSettingsService:
                 if status in REQUIRED_ORDER_STATUSES
             )
             raise ValueError(f"Enabled order statuses must include: {required_values}.")
+
+    @staticmethod
+    def _validate_task_generation_horizon_days(value: int) -> None:
+        if value < MIN_TASK_GENERATION_HORIZON_DAYS or value > MAX_TASK_GENERATION_HORIZON_DAYS:
+            raise ValueError(
+                "Task generation horizon days must be between "
+                f"{MIN_TASK_GENERATION_HORIZON_DAYS} and "
+                f"{MAX_TASK_GENERATION_HORIZON_DAYS}."
+            )
 
     @staticmethod
     def _disabled_optional_statuses(statuses: tuple[OrderStatus, ...]) -> tuple[OrderStatus, ...]:

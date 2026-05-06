@@ -36,6 +36,12 @@ class OrderSupplierStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class TaskRecurrenceType(StrEnum):
+    DAILY = "DAILY"
+    WEEKLY = "WEEKLY"
+    MONTHLY = "MONTHLY"
+
+
 class StockMovementType(StrEnum):
     IN = "IN"
     OUT = "OUT"

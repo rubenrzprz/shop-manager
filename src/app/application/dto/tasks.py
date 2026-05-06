@@ -1,12 +1,24 @@
 from dataclasses import dataclass
 from datetime import date, datetime
 
+from app.domain.enums import TaskRecurrenceType
+
 
 @dataclass(frozen=True)
 class CreateTaskInput:
     title: str
     due_date: date
     notes: str | None = None
+
+
+@dataclass(frozen=True)
+class CreateTaskSeriesInput:
+    title: str
+    recurrence_type: TaskRecurrenceType
+    starts_on: date
+    recurrence_interval: int = 1
+    notes: str | None = None
+    ends_on: date | None = None
 
 
 @dataclass(frozen=True)

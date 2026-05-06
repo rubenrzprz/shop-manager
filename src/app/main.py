@@ -2,6 +2,8 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
+from app.application.services.tasks import GenerateRecurringTasksService
+from app.infrastructure.db.session import SessionLocal
 from app.ui.windows.main_window import MainWindow
 
 
@@ -38,10 +40,27 @@ def main() -> None:
         }
     """)
 
+    _generate_recurring_tasks()
+
     window = MainWindow()
     window.show()
 
     sys.exit(app.exec())
+
+
+def _generate_recurring_tasks() -> None:
+    try:
+        session = SessionLocal()
+    except Exception:
+        return
+
+    try:
+        GenerateRecurringTasksService(session).execute()
+        session.commit()
+    except Exception:
+        session.rollback()
+    finally:
+        session.close()
 
 
 if __name__ == "__main__":
