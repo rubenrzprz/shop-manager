@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 
 from app.application.dto.tasks import CreateTaskInput
+import app.application.services.tasks as task_services_module
 from app.application.services.tasks import (
     CompleteTaskService,
     CreateTaskService,
@@ -60,6 +61,43 @@ def test_dashboard_tasks_service_groups_overdue_pending_and_completed_today(db_s
     assert [task.id for task in task_list.pending_today] == [pending_today.id]
     assert [task.id for task in task_list.completed_today] == [completed_today.id]
     assert future.id not in [task.id for task in task_list.overdue]
+
+
+def test_dashboard_tasks_service_uses_local_day_for_completed_tasks(
+    db_session, monkeypatch
+):
+    selected_day = date(2026, 5, 5)
+    local_timezone = timezone(timedelta(hours=2))
+    monkeypatch.setattr(
+        task_services_module,
+        "_get_local_timezone",
+        lambda: local_timezone,
+    )
+    service = CreateTaskService(db_session)
+    early_local_day = service.execute(
+        CreateTaskInput(title="Early local day", due_date=selected_day)
+    )
+    late_local_day = service.execute(
+        CreateTaskInput(title="Late local day", due_date=selected_day)
+    )
+    next_local_day = service.execute(
+        CreateTaskInput(title="Next local day", due_date=selected_day)
+    )
+    previous_local_day = service.execute(
+        CreateTaskInput(title="Previous local day", due_date=selected_day)
+    )
+    early_local_day.completed_at = datetime(2026, 5, 4, 22, 30, tzinfo=timezone.utc)
+    late_local_day.completed_at = datetime(2026, 5, 5, 21, 30, tzinfo=timezone.utc)
+    next_local_day.completed_at = datetime(2026, 5, 5, 22, 0, tzinfo=timezone.utc)
+    previous_local_day.completed_at = datetime(2026, 5, 4, 21, 59, tzinfo=timezone.utc)
+    db_session.flush()
+
+    task_list = ListDashboardTasksService(db_session).execute(selected_day)
+
+    assert [task.id for task in task_list.completed_today] == [
+        late_local_day.id,
+        early_local_day.id,
+    ]
 
 
 def test_complete_and_reopen_task_services_update_completion_state(db_session):
