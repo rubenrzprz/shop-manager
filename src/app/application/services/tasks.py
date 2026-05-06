@@ -1,4 +1,5 @@
 from calendar import monthrange
+from math import ceil
 from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
@@ -226,8 +227,18 @@ def _iter_occurrence_dates(
     generation_until: date,
 ) -> list[date]:
     occurrence_dates: list[date] = []
-    occurrence_index = 0
-    current_date = series.starts_on
+    occurrence_index = _first_occurrence_index(
+        series.starts_on,
+        series.recurrence_type,
+        series.recurrence_interval,
+        generation_start,
+    )
+    current_date = _next_occurrence_date(
+        series.starts_on,
+        series.recurrence_type,
+        series.recurrence_interval,
+        occurrence_index,
+    )
     generation_end = min(
         generation_until,
         series.ends_on if series.ends_on is not None else generation_until,
@@ -244,6 +255,27 @@ def _iter_occurrence_dates(
         occurrence_index += 1
 
     return occurrence_dates
+
+
+def _first_occurrence_index(
+    starts_on: date,
+    recurrence_type: TaskRecurrenceType,
+    interval: int,
+    generation_start: date,
+) -> int:
+    if generation_start <= starts_on:
+        return 0
+
+    if recurrence_type == TaskRecurrenceType.DAILY:
+        return ceil((generation_start - starts_on).days / interval)
+    if recurrence_type == TaskRecurrenceType.WEEKLY:
+        return ceil((generation_start - starts_on).days / (interval * 7))
+    if recurrence_type == TaskRecurrenceType.MONTHLY:
+        month_delta = (generation_start.year - starts_on.year) * 12
+        month_delta += generation_start.month - starts_on.month
+        return max(0, month_delta // interval)
+
+    raise ValueError("Task recurrence type is unsupported.")
 
 
 def _next_occurrence_date(
