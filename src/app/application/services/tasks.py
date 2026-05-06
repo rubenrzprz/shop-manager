@@ -1,14 +1,10 @@
-from datetime import date, datetime, time, timedelta, timezone, tzinfo
+from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.application.dto.tasks import CreateTaskInput, DashboardTaskList, TaskListItem
 from app.infrastructure.db.models import Task
-
-
-def _get_local_timezone() -> tzinfo:
-    return datetime.now().astimezone().tzinfo or timezone.utc
 
 
 class CreateTaskService:
@@ -41,15 +37,13 @@ class ListDashboardTasksService:
 
     def execute(self, day: date | None = None) -> DashboardTaskList:
         selected_day = day or date.today()
-        local_timezone = _get_local_timezone()
-        completed_start = datetime.combine(selected_day, time.min, tzinfo=local_timezone)
-        completed_end = datetime.combine(
+        completed_start_utc = datetime.combine(selected_day, time.min).astimezone(
+            timezone.utc
+        )
+        completed_end_utc = datetime.combine(
             selected_day + timedelta(days=1),
             time.min,
-            tzinfo=local_timezone,
-        )
-        completed_start_utc = completed_start.astimezone(timezone.utc)
-        completed_end_utc = completed_end.astimezone(timezone.utc)
+        ).astimezone(timezone.utc)
 
         overdue = self._session.scalars(
             select(Task)

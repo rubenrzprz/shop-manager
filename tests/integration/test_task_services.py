@@ -1,9 +1,10 @@
+import os
+import time as time_module
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
 from app.application.dto.tasks import CreateTaskInput
-import app.application.services.tasks as task_services_module
 from app.application.services.tasks import (
     CompleteTaskService,
     CreateTaskService,
@@ -64,15 +65,15 @@ def test_dashboard_tasks_service_groups_overdue_pending_and_completed_today(db_s
 
 
 def test_dashboard_tasks_service_uses_local_day_for_completed_tasks(
-    db_session, monkeypatch
+    db_session,
 ):
-    selected_day = date(2026, 5, 5)
-    local_timezone = timezone(timedelta(hours=2))
-    monkeypatch.setattr(
-        task_services_module,
-        "_get_local_timezone",
-        lambda: local_timezone,
-    )
+    if not hasattr(time_module, "tzset"):
+        pytest.skip("time.tzset is required to force a local timezone for this test.")
+
+    previous_timezone = os.environ.get("TZ")
+    os.environ["TZ"] = "Europe/Madrid"
+    time_module.tzset()
+    selected_day = date(2026, 1, 5)
     service = CreateTaskService(db_session)
     early_local_day = service.execute(
         CreateTaskInput(title="Early local day", due_date=selected_day)
@@ -86,13 +87,20 @@ def test_dashboard_tasks_service_uses_local_day_for_completed_tasks(
     previous_local_day = service.execute(
         CreateTaskInput(title="Previous local day", due_date=selected_day)
     )
-    early_local_day.completed_at = datetime(2026, 5, 4, 22, 30, tzinfo=timezone.utc)
-    late_local_day.completed_at = datetime(2026, 5, 5, 21, 30, tzinfo=timezone.utc)
-    next_local_day.completed_at = datetime(2026, 5, 5, 22, 0, tzinfo=timezone.utc)
-    previous_local_day.completed_at = datetime(2026, 5, 4, 21, 59, tzinfo=timezone.utc)
+    early_local_day.completed_at = datetime(2026, 1, 4, 23, 30, tzinfo=timezone.utc)
+    late_local_day.completed_at = datetime(2026, 1, 5, 22, 30, tzinfo=timezone.utc)
+    next_local_day.completed_at = datetime(2026, 1, 5, 23, 0, tzinfo=timezone.utc)
+    previous_local_day.completed_at = datetime(2026, 1, 4, 22, 30, tzinfo=timezone.utc)
     db_session.flush()
 
-    task_list = ListDashboardTasksService(db_session).execute(selected_day)
+    try:
+        task_list = ListDashboardTasksService(db_session).execute(selected_day)
+    finally:
+        if previous_timezone is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = previous_timezone
+        time_module.tzset()
 
     assert [task.id for task in task_list.completed_today] == [
         late_local_day.id,
