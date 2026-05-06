@@ -135,9 +135,9 @@ Later options:
    - group/filter the product table by assigned categories later
    - consider category filters in order product/variant selection later
 4. Basic tasks
-   - task table, DTOs, services, tests
-   - create/list/complete/reopen one-off tasks
-   - dashboard lists overdue, pending, and completed tasks
+   - completed with task table, DTOs, services, tests
+   - completed create/list/complete/reopen one-off tasks
+   - completed dashboard lists overdue, pending, and completed tasks
 5. Task series generation
    - task series table
    - recurrence fields

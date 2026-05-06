@@ -156,7 +156,9 @@ The project currently has these completed vertical slices:
 - Dashboard Shell v1
   - dashboard is the first application tab
   - quick action buttons open create product/supplier/customer/order flows and settings
-  - daily task sections show empty states for overdue, pending today, and completed today
+  - daily task sections show overdue, pending today, and completed today tasks
+  - create standalone one-off tasks
+  - mark tasks complete and reopen completed tasks
 - Product Management v1
   - create products
   - list products
@@ -267,6 +269,8 @@ The project currently has these completed vertical slices:
 - Tasks should support standalone reminders, custom order-linked reminders, and recurring reminders.
 - Daily task sections should show overdue tasks, pending tasks for the selected day, and completed
   tasks for that same day.
+- Standalone one-off `Task` rows are implemented with title, notes, due date, and completed
+  timestamp.
 - Recurring tasks should use a `TaskSeries` plus generated `Task` occurrences:
   - `TaskSeries`: title, notes, optional order, recurrence type/interval, starts on, optional ends
     on, active flag
@@ -286,30 +290,27 @@ The project currently has these completed vertical slices:
 
 When asked to propose the next logical step, consider this order:
 
-1. Product category grouping polish
-   - consider grouping the products page by category if filtering is not enough
-   - consider category filters in product/variant pickers when order creation needs it
-2. Basic task reminders
-   - add one-off task persistence, services, and tests
-   - list tasks due today and mark tasks complete/reopened
-3. Recurring task generation
+1. Recurring task generation
    - add task series persistence
    - add `task_generation_horizon_days`
    - generate missing occurrences on startup through the configured horizon
-4. Order-bound reminders
+2. Order-bound reminders
    - add custom order-linked tasks
    - add automatic order follow-up reminders with `default_order_follow_up_days`
-5. Calendar task view
+3. Calendar task view
    - browse tasks by date
    - create reminders directly on selected dates
-6. Localization polish
+4. Product category grouping polish
+   - consider grouping the products page by category if filtering is not enough
+   - consider category filters in product/variant pickers when order creation needs it
+5. Localization polish
    - translate any newly added UI strings through the existing helper
    - consider service-layer message codes if application validation errors need full localization
    - consider broader formatting localization for currency/date display
-7. Stock movements
+6. Stock movements
    - reduce stock when an order reaches the appropriate status
    - do not mix stock behavior into basic order create/list
-8. Shipment workflows
+7. Shipment workflows
    - create/update shipment info for orders
 
 Prefer one small vertical slice per branch.
