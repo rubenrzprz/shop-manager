@@ -229,11 +229,16 @@ class ReopenTaskService:
         self._session = session
 
     def execute(self, task_id: int) -> Task:
-        task = self._session.get(Task, task_id)
+        task = self._session.get(Task, task_id, options=[joinedload(Task.order)])
         if task is None:
             raise ValueError("Task not found.")
 
         if task.completed_at is not None and task.is_auto_order_follow_up:
+            if (
+                task.order is not None
+                and task.order.status not in ACTIVE_ORDER_FOLLOW_UP_STATUSES
+            ):
+                raise ValueError("Automatic follow-ups cannot be reopened for inactive orders.")
             GenerateOrderFollowUpTasksService(self._session).delete_open_successor_for_task(task)
         task.completed_at = None
         self._session.flush()

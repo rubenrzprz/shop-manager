@@ -111,6 +111,8 @@ Implemented behavior:
 - Completing an automatic order follow-up schedules the next one if the order remains active.
 - Completed and cancelled orders stop producing automatic follow-up reminders and clear open
   automatic follow-ups.
+- Completed automatic follow-ups cannot be reopened after their order becomes completed or
+  cancelled.
 - Custom order reminders should remain independent from default follow-up reminders.
 
 ## Calendar View

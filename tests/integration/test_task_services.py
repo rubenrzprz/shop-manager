@@ -12,6 +12,7 @@ from app.application.dto.products import CreateProductInput, CreateProductVarian
 from app.application.dto.tasks import CreateTaskInput, CreateTaskSeriesInput
 from app.application.services.customers import CreateCustomerService
 from app.application.services.orders import CreateOrderService
+from app.application.services.orders import UpdateOrderStatusService
 from app.application.services.products import CreateProductService
 from app.application.services.settings import ApplicationSettingsService
 from app.application.services.tasks import (
@@ -403,6 +404,35 @@ def test_complete_auto_order_follow_up_stops_when_order_is_completed(db_session)
 
     tasks = db_session.scalars(select(Task).where(Task.order_id == order.id)).all()
     assert len(tasks) == 1
+
+
+def test_reopen_auto_order_follow_up_rejects_inactive_order(db_session):
+    order = create_order(db_session, order_date=date(2026, 5, 1))
+    GenerateOrderFollowUpTasksService(db_session).execute(date(2026, 5, 5))
+    task = db_session.scalar(select(Task).where(Task.order_id == order.id))
+    CompleteTaskService(db_session).execute(
+        task.id,
+        completed_at=datetime(2026, 5, 9, 12, 0, tzinfo=timezone.utc),
+    )
+    order.status = OrderStatus.READY
+    db_session.flush()
+    UpdateOrderStatusService(db_session).execute(order.id, OrderStatus.COMPLETED)
+
+    with pytest.raises(
+        ValueError,
+        match="Automatic follow-ups cannot be reopened for inactive orders.",
+    ):
+        ReopenTaskService(db_session).execute(task.id)
+
+    db_session.refresh(task)
+    open_auto_follow_ups = db_session.scalars(
+        select(Task)
+        .where(Task.order_id == order.id)
+        .where(Task.is_auto_order_follow_up.is_(True))
+        .where(Task.completed_at.is_(None))
+    ).all()
+    assert task.completed_at is not None
+    assert open_auto_follow_ups == []
 
 
 def test_dashboard_tasks_service_groups_overdue_pending_and_completed_today(db_session):
