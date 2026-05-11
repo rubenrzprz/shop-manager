@@ -11,6 +11,7 @@ from app.application.dto.tasks import (
     CreateTaskSeriesInput,
     DashboardTaskList,
     TaskListItem,
+    UpdateTaskInput,
 )
 from app.application.services.settings import ApplicationSettingsService
 from app.domain.enums import OrderStatus, TaskRecurrenceType
@@ -49,6 +50,39 @@ class CreateTaskService:
     def _validate_task_input(data: CreateTaskInput) -> None:
         if not data.title or not data.title.strip():
             raise ValueError("Task title is required.")
+
+
+class GetTaskForEditService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, task_id: int) -> TaskListItem:
+        task = self._session.get(Task, task_id, options=[joinedload(Task.order)])
+        if task is None:
+            raise ValueError("Task not found.")
+
+        return ListDashboardTasksService._to_list_item(task)
+
+
+class UpdateTaskService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, task_id: int, data: UpdateTaskInput) -> Task:
+        CreateTaskService._validate_task_input(
+            CreateTaskInput(title=data.title, due_date=data.due_date, notes=data.notes)
+        )
+        task = self._session.get(Task, task_id)
+        if task is None:
+            raise ValueError("Task not found.")
+        if task.is_auto_order_follow_up:
+            raise ValueError("Automatic follow-up tasks cannot be edited.")
+
+        task.title = data.title.strip()
+        task.notes = data.notes
+        task.due_date = data.due_date
+        self._session.flush()
+        return task
 
 
 class CreateTaskSeriesService:
