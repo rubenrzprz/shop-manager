@@ -9,7 +9,7 @@ from sqlalchemy import select
 from app.application.dto.customers import CreateCustomerInput
 from app.application.dto.orders import CreateOrderInput, CreateOrderLineInput
 from app.application.dto.products import CreateProductInput, CreateProductVariantInput
-from app.application.dto.tasks import CreateTaskInput, CreateTaskSeriesInput
+from app.application.dto.tasks import CreateTaskInput, CreateTaskSeriesInput, UpdateTaskInput
 from app.application.services.customers import CreateCustomerService
 from app.application.services.orders import CreateOrderService
 from app.application.services.orders import UpdateOrderStatusService
@@ -21,9 +21,11 @@ from app.application.services.tasks import (
     CreateTaskSeriesService,
     GenerateOrderFollowUpTasksService,
     GenerateRecurringTasksService,
+    GetTaskForEditService,
     ListCalendarTasksService,
     ListDashboardTasksService,
     ReopenTaskService,
+    UpdateTaskService,
 )
 from app.domain.enums import CustomerType, OrderStatus, TaskRecurrenceType
 from app.infrastructure.db.models import Task
@@ -124,6 +126,35 @@ def test_create_task_service_rejects_blank_title(db_session):
     with pytest.raises(ValueError, match="Task title is required."):
         CreateTaskService(db_session).execute(
             CreateTaskInput(title="  ", due_date=date(2026, 5, 5))
+        )
+
+
+def test_update_task_service_updates_editable_task_fields(db_session):
+    task = CreateTaskService(db_session).execute(
+        CreateTaskInput(title="Original", due_date=date(2026, 5, 11), notes="Old")
+    )
+
+    updated = UpdateTaskService(db_session).execute(
+        task.id,
+        UpdateTaskInput(title="Updated", due_date=date(2026, 5, 12), notes="New"),
+    )
+    edit_item = GetTaskForEditService(db_session).execute(task.id)
+
+    assert updated.title == "Updated"
+    assert updated.due_date == date(2026, 5, 12)
+    assert updated.notes == "New"
+    assert edit_item.title == "Updated"
+
+
+def test_update_task_service_rejects_auto_order_follow_up(db_session):
+    order = create_order(db_session, order_date=date(2026, 5, 1))
+    GenerateOrderFollowUpTasksService(db_session).execute(date(2026, 5, 1))
+    task = db_session.scalar(select(Task).where(Task.order_id == order.id))
+
+    with pytest.raises(ValueError, match="Automatic follow-up tasks cannot be edited"):
+        UpdateTaskService(db_session).execute(
+            task.id,
+            UpdateTaskInput(title="Changed", due_date=date(2026, 5, 2)),
         )
 
 

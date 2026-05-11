@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
@@ -27,6 +27,8 @@ from app.ui.localization import order_status_label, t
 
 
 class OrdersPage(QWidget):
+    order_changed = Signal()
+
     def __init__(self) -> None:
         super().__init__()
 
@@ -124,6 +126,22 @@ class OrdersPage(QWidget):
         dialog = OrderDialog(self)
         if dialog.exec():
             self.load_orders()
+            self.order_changed.emit()
+
+    def open_order_for_edit(self, order_id: int) -> None:
+        self.load_orders()
+        for row in range(self._table.rowCount()):
+            id_item = self._table.item(row, 0)
+            if id_item is not None and id_item.data(Qt.UserRole) == order_id:
+                self._table.selectRow(row)
+                self.open_edit_dialog()
+                return
+
+        QMessageBox.information(
+            self,
+            t("No order selected"),
+            t("Select an active order to edit."),
+        )
 
     def open_edit_dialog(self) -> None:
         order = self._selected_order()
@@ -156,6 +174,7 @@ class OrdersPage(QWidget):
         dialog = OrderDialog(self, order_id=order.id)
         if dialog.exec():
             self.load_orders()
+            self.order_changed.emit()
 
     def open_reminder_dialog(self) -> None:
         order = self._selected_order()
@@ -309,6 +328,7 @@ class OrdersPage(QWidget):
             UpdateOrderStatusService(session).execute(order.id, target_status)
             session.commit()
             self.load_orders()
+            self.order_changed.emit()
         except Exception as exc:
             session.rollback()
             QMessageBox.critical(self, t("Could not update order status"), str(exc))

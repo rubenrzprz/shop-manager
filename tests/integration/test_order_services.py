@@ -14,6 +14,7 @@ from app.application.dto.orders import (
 from app.application.dto.products import CreateProductInput, CreateProductVariantInput
 from app.application.dto.tasks import CreateTaskInput
 from app.application.services.customers import CreateCustomerService
+from app.application.services.dashboard import GetDashboardSummaryService
 from app.application.services.orders import (
     CreateOrderService,
     GetOrderForEditService,
@@ -219,6 +220,59 @@ def test_list_orders_service_returns_orders_with_customer_and_lines(db_session):
     assert len(orders[0].lines) == 1
     assert orders[0].lines[0].product_name == "Traditional Shirt"
     assert orders[0].lines[0].sku == variant.sku
+
+
+def test_dashboard_summary_service_returns_counts_due_soon_and_recent_orders(db_session):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session)
+    service = CreateOrderService(db_session)
+
+    due_later = service.execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 10),
+            deadline=date(2026, 4, 30),
+            lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+        )
+    )
+    due_earlier = service.execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 11),
+            deadline=date(2026, 4, 20),
+            lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+        )
+    )
+    completed = service.execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 12),
+            deadline=date(2026, 4, 15),
+            lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+        )
+    )
+    due_earlier.status = OrderStatus.CONFIRMED
+    completed.status = OrderStatus.COMPLETED
+    db_session.flush()
+
+    summary = GetDashboardSummaryService(db_session).execute(
+        due_soon_limit=5,
+        recent_limit=2,
+    )
+
+    assert summary.active_order_counts[OrderStatus.DRAFT] == 1
+    assert summary.active_order_counts[OrderStatus.CONFIRMED] == 1
+    assert summary.active_order_counts[OrderStatus.IN_PROGRESS] == 0
+    assert summary.active_order_counts[OrderStatus.READY] == 0
+    assert [order.id for order in summary.due_soon_orders] == [
+        due_earlier.id,
+        due_later.id,
+    ]
+    assert completed.id not in [order.id for order in summary.due_soon_orders]
+    assert [order.id for order in summary.recent_orders] == [
+        completed.id,
+        due_earlier.id,
+    ]
 
 
 def test_get_order_for_edit_service_returns_draft_order_details(db_session):

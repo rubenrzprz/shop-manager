@@ -6,7 +6,6 @@ from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
-    QDateEdit,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -41,6 +40,7 @@ from app.application.services.orders import (
 )
 from app.domain.enums import DiscountType
 from app.infrastructure.db.session import SessionLocal
+from app.ui.date_edit import AppDateEdit
 from app.ui.dialog_helpers import translate_button_box
 from app.ui.dialogs.customer_picker_dialog import CustomerPickerDialog
 from app.ui.dialogs.product_variant_picker_dialog import ProductVariantPickerDialog
@@ -75,15 +75,13 @@ class OrderDialog(QDialog):
         customer_layout.addWidget(self._customer_display)
         customer_layout.addWidget(self._select_customer_button)
 
-        self._order_date_input = QDateEdit()
-        self._order_date_input.setCalendarPopup(True)
+        self._order_date_input = AppDateEdit()
         self._order_date_input.setDate(QDate.currentDate())
         self._order_date_input.dateChanged.connect(self._sync_deadline_constraints)
 
         self._has_deadline_checkbox = QCheckBox(t("Set deadline"))
         self._has_deadline_checkbox.toggled.connect(self._sync_deadline_constraints)
-        self._deadline_input = QDateEdit()
-        self._deadline_input.setCalendarPopup(True)
+        self._deadline_input = AppDateEdit()
         self._deadline_input.setEnabled(False)
 
         deadline_layout = QHBoxLayout()

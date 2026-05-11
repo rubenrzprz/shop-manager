@@ -13,6 +13,13 @@ class CreateTaskInput:
 
 
 @dataclass(frozen=True)
+class UpdateTaskInput:
+    title: str
+    due_date: date
+    notes: str | None = None
+
+
+@dataclass(frozen=True)
 class CreateTaskSeriesInput:
     title: str
     recurrence_type: TaskRecurrenceType

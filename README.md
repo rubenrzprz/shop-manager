@@ -18,16 +18,17 @@ application services to keep business logic out of the interface layer.
 - 👥 Customers: create, list, edit
 - 🧾 Orders: create, edit, calculate totals, apply discounts, validate deadlines
 - 🔁 Order workflows: configurable statuses, advance/revert/cancel/recover actions
-- ✅ Tasks: create one-off and order-linked reminders, generate recurring and active-order
-  follow-up reminders, browse tasks by selected date or month grid, complete and reopen tasks
+- ✅ Tasks: create one-off, order-linked, and recurring reminders, generate active-order
+  follow-up reminders, browse tasks by selected date or month grid, edit task occurrences, complete
+  and reopen tasks
 - ⚙️ Settings: typed application settings backed by the database
 - 🌐 Localization: English and Spanish UI labels/messages
-- 🏠 Dashboard shell: entry tab with quick actions and daily task reminders
+- 🏠 Dashboard shell: entry tab with shortcut chips, order overview, and daily task reminders
 
 ## What Is Coming 🧭
 
-- 🔁 Manual recurring reminder creation
 - 🧭 Dashboard and reminder UI polish
+- 🔁 Recurring reminder editing polish
 - 🏷️ Product category grouping polish
 - 📦 Stock movements
 - 🚚 Shipment workflows
@@ -158,12 +159,12 @@ SQLAlchemy models stay behind service boundaries.
 
 Near-term implementation path:
 
-1. Manual recurring reminders
-   - create standalone recurring task series from the UI
-   - generate occurrences after save
-2. Dashboard and reminder UI polish
-   - improve the dashboard task layout and reminder ergonomics
+1. Dashboard and reminder UI polish
+   - continue improving dashboard reminder ergonomics after real-world use
    - consider customizable task colors for calendar/dashboard blocks
+2. Recurring reminder editing polish
+   - edit future recurring occurrences or whole recurring series
+   - consider advanced monthly recurrence rules
 3. Product category browsing polish
    - consider grouping the product table by assigned categories if filtering is not enough
    - consider category filters in order product/variant selection
