@@ -110,6 +110,11 @@ class Order(Base):
         back_populates="order",
         cascade="all, delete-orphan",
     )
+    tasks = relationship(
+        "Task",
+        back_populates="order",
+        cascade="all, delete-orphan",
+    )
 
 
 class Shipment(Base):

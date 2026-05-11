@@ -3,7 +3,10 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
-from app.application.services.tasks import GenerateRecurringTasksService
+from app.application.services.tasks import (
+    GenerateOrderFollowUpTasksService,
+    GenerateRecurringTasksService,
+)
 from app.infrastructure.db.session import SessionLocal
 from app.ui.windows.main_window import MainWindow
 
@@ -60,6 +63,7 @@ def _generate_recurring_tasks() -> None:
 
     try:
         GenerateRecurringTasksService(session).execute()
+        GenerateOrderFollowUpTasksService(session).execute()
         session.commit()
     except Exception:
         session.rollback()

@@ -63,6 +63,16 @@ class Task(Base):
         ForeignKey("task_series.id", ondelete="CASCADE"),
         nullable=True,
     )
+    order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    is_auto_order_follow_up: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     due_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -83,3 +93,4 @@ class Task(Base):
     )
 
     series = relationship("TaskSeries", back_populates="tasks")
+    order = relationship("Order", back_populates="tasks")
