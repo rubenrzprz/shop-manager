@@ -176,7 +176,8 @@ class DashboardPage(QWidget):
         else:
             title = f"{order_prefix}{task.title}"
         if task.notes:
-            return f"{task.due_date.isoformat()} - {title} ({t(task.notes)})"
+            notes = t(task.notes) if task.is_auto_order_follow_up else task.notes
+            return f"{task.due_date.isoformat()} - {title} ({notes})"
 
         return f"{task.due_date.isoformat()} - {title}"
 

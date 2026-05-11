@@ -233,6 +233,8 @@ class ReopenTaskService:
         if task is None:
             raise ValueError("Task not found.")
 
+        if task.completed_at is not None and task.is_auto_order_follow_up:
+            GenerateOrderFollowUpTasksService(self._session).delete_open_successor_for_task(task)
         task.completed_at = None
         self._session.flush()
 
@@ -284,6 +286,23 @@ class GenerateOrderFollowUpTasksService:
         self._session.add(next_task)
         self._session.flush()
         return next_task
+
+    def delete_open_successor_for_task(self, task: Task) -> None:
+        if task.order_id is None:
+            return
+
+        successor = self._session.scalar(
+            select(Task)
+            .where(Task.order_id == task.order_id)
+            .where(Task.id != task.id)
+            .where(Task.is_auto_order_follow_up.is_(True))
+            .where(Task.completed_at.is_(None))
+            .where(Task.due_date >= task.due_date)
+            .order_by(Task.due_date, Task.id)
+            .limit(1)
+        )
+        if successor is not None:
+            self._session.delete(successor)
 
     def _has_open_follow_up(self, order_id: int) -> bool:
         return (

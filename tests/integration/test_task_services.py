@@ -345,6 +345,26 @@ def test_complete_auto_order_follow_up_schedules_next_when_order_remains_active(
     assert tasks[1].due_date == date(2026, 5, 19)
 
 
+def test_reopen_auto_order_follow_up_removes_open_successor(db_session):
+    ApplicationSettingsService(db_session).set_default_order_follow_up_days(10)
+    order = create_order(db_session, order_date=date(2026, 5, 1))
+    GenerateOrderFollowUpTasksService(db_session).execute(date(2026, 5, 5))
+    task = db_session.scalar(select(Task).where(Task.order_id == order.id))
+    CompleteTaskService(db_session).execute(
+        task.id,
+        completed_at=datetime(2026, 5, 9, 12, 0, tzinfo=timezone.utc),
+    )
+
+    ReopenTaskService(db_session).execute(task.id)
+
+    tasks = db_session.scalars(
+        select(Task).where(Task.order_id == order.id).order_by(Task.due_date)
+    ).all()
+    assert len(tasks) == 1
+    assert tasks[0].id == task.id
+    assert tasks[0].completed_at is None
+
+
 def test_complete_auto_order_follow_up_stops_when_order_is_completed(db_session):
     order = create_order(db_session, order_date=date(2026, 5, 1))
     GenerateOrderFollowUpTasksService(db_session).execute(date(2026, 5, 5))
