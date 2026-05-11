@@ -117,17 +117,22 @@ Implemented behavior:
 
 ## Calendar View
 
-The calendar view should be built after task persistence exists.
+The calendar task view is implemented with selected-date task browsing in the dashboard task area
+and a dedicated Calendar tab with a month grid.
 
-Expected behavior:
+Implemented behavior:
 
 - browse tasks by selected date
+- see which month-grid days have tasks
+- month-grid days show capped colored task blocks plus a "+ N more" marker instead of full
+  unbounded task text
 - see pending and completed tasks for that date
 - create standalone reminders directly on a selected date
 - create order-linked reminders when launched from an order context
 
 Later options:
 
+- customizable task colors or task categories for calendar/dashboard blocks
 - reschedule tasks
 - edit one occurrence
 - edit future occurrences
@@ -171,8 +176,9 @@ Expected v1 behavior:
 7. Default order follow-up reminders
    - completed with `default_order_follow_up_days` and automatic active-order reminders
 8. Calendar task view
-   - browse days
-   - create reminders from selected date
+   - completed with dashboard selected-date browsing
+   - completed with a Calendar tab month grid showing days with tasks
+   - completed with standalone reminders defaulting to the selected date
 9. Manual recurring reminders
    - create standalone recurring reminders from the UI
    - generate occurrences after save

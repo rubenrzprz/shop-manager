@@ -21,6 +21,7 @@ from app.application.services.tasks import (
     CreateTaskSeriesService,
     GenerateOrderFollowUpTasksService,
     GenerateRecurringTasksService,
+    ListCalendarTasksService,
     ListDashboardTasksService,
     ReopenTaskService,
 )
@@ -344,7 +345,7 @@ def test_complete_auto_order_follow_up_schedules_next_when_order_remains_active(
     assert len(tasks) == 2
     assert tasks[0].completed_at is not None
     assert tasks[1].completed_at is None
-    assert tasks[1].due_date == date(2026, 5, 19)
+    assert tasks[1].due_date == date(2026, 5, 21)
 
 
 def test_reopen_auto_order_follow_up_removes_open_successor(db_session):
@@ -388,6 +389,27 @@ def test_reopen_auto_order_follow_up_removes_successor_after_early_completion(
     assert len(tasks) == 1
     assert tasks[0].id == task.id
     assert tasks[0].completed_at is None
+
+
+def test_complete_future_auto_order_follow_up_schedules_next_after_due_date(
+    db_session,
+):
+    ApplicationSettingsService(db_session).set_default_order_follow_up_days(7)
+    order = create_order(db_session, order_date=date(2026, 5, 13))
+    GenerateOrderFollowUpTasksService(db_session).execute(date(2026, 5, 13))
+    task = db_session.scalar(select(Task).where(Task.order_id == order.id))
+    assert task.due_date == date(2026, 5, 20)
+
+    CompleteTaskService(db_session).execute(
+        task.id,
+        completed_at=datetime(2026, 5, 10, 12, 0, tzinfo=timezone.utc),
+    )
+
+    tasks = db_session.scalars(
+        select(Task).where(Task.order_id == order.id).order_by(Task.due_date)
+    ).all()
+    assert len(tasks) == 2
+    assert tasks[1].due_date == date(2026, 5, 27)
 
 
 def test_complete_auto_order_follow_up_stops_when_order_is_completed(db_session):
@@ -461,6 +483,45 @@ def test_dashboard_tasks_service_groups_overdue_pending_and_completed_today(db_s
     assert [task.id for task in task_list.pending_today] == [pending_today.id]
     assert [task.id for task in task_list.completed_today] == [completed_today.id]
     assert future.id not in [task.id for task in task_list.overdue]
+
+
+def test_calendar_tasks_service_lists_tasks_grouped_by_due_date(db_session):
+    order = create_order(db_session)
+    service = CreateTaskService(db_session)
+    first_day_task = service.execute(
+        CreateTaskInput(title="First task", due_date=date(2026, 5, 5))
+    )
+    order_task = service.execute(
+        CreateTaskInput(
+            title="Order task",
+            due_date=date(2026, 5, 5),
+            order_id=order.id,
+        )
+    )
+    outside_range_task = service.execute(
+        CreateTaskInput(title="Outside", due_date=date(2026, 6, 1))
+    )
+    completed_task = service.execute(
+        CreateTaskInput(title="Done task", due_date=date(2026, 5, 6))
+    )
+    CompleteTaskService(db_session).execute(completed_task.id)
+
+    calendar_days = ListCalendarTasksService(db_session).execute(
+        date(2026, 5, 1),
+        date(2026, 5, 31),
+    )
+
+    tasks_by_day = {calendar_day.day: calendar_day.tasks for calendar_day in calendar_days}
+    assert [task.id for task in tasks_by_day[date(2026, 5, 5)]] == [
+        first_day_task.id,
+        order_task.id,
+    ]
+    assert tasks_by_day[date(2026, 5, 5)][1].order_number == order.order_number
+    assert [task.id for task in tasks_by_day[date(2026, 5, 6)]] == [completed_task.id]
+    assert date(2026, 6, 1) not in tasks_by_day
+    assert outside_range_task.id not in [
+        task.id for tasks in tasks_by_day.values() for task in tasks
+    ]
 
 
 def test_dashboard_tasks_service_uses_local_day_for_completed_tasks(

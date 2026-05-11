@@ -1,7 +1,8 @@
 from datetime import date
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QDate, Signal
 from PySide6.QtWidgets import (
+    QDateEdit,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -25,6 +26,7 @@ from app.ui.localization import t
 
 class DashboardPage(QWidget):
     action_requested = Signal(str)
+    task_changed = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -54,6 +56,14 @@ class DashboardPage(QWidget):
         self._shortcuts_group.setLayout(shortcuts_layout)
 
         self._daily_tasks_group = QGroupBox()
+        self._selected_date_label = QLabel()
+        self._selected_date_input = QDateEdit()
+        self._selected_date_input.setCalendarPopup(True)
+        today = date.today()
+        self._selected_date_input.setDate(QDate(today.year, today.month, today.day))
+        self._selected_date_input.dateChanged.connect(self.load_tasks)
+        self._today_button = QPushButton()
+        self._today_button.clicked.connect(self._select_today)
         self._new_task_button = QPushButton()
         self._refresh_tasks_button = QPushButton()
         self._overdue_label = QLabel()
@@ -67,6 +77,9 @@ class DashboardPage(QWidget):
 
         tasks_layout = QVBoxLayout()
         task_actions_layout = QHBoxLayout()
+        task_actions_layout.addWidget(self._selected_date_label)
+        task_actions_layout.addWidget(self._selected_date_input)
+        task_actions_layout.addWidget(self._today_button)
         task_actions_layout.addWidget(self._new_task_button)
         task_actions_layout.addWidget(self._refresh_tasks_button)
         task_actions_layout.addStretch()
@@ -98,11 +111,13 @@ class DashboardPage(QWidget):
         self._settings_button.setText(t("Settings"))
 
         self._daily_tasks_group.setTitle(t("Daily Tasks"))
+        self._selected_date_label.setText(t("Selected date"))
+        self._today_button.setText(t("Today"))
         self._new_task_button.setText(t("New Task"))
         self._refresh_tasks_button.setText(t("Refresh"))
         self._overdue_label.setText(t("Overdue"))
-        self._pending_label.setText(t("Pending Today"))
-        self._completed_label.setText(t("Completed Today"))
+        self._pending_label.setText(t("Pending tasks"))
+        self._completed_label.setText(t("Completed tasks"))
         self.load_tasks()
 
     def load_tasks(self, *_args) -> None:
@@ -113,7 +128,8 @@ class DashboardPage(QWidget):
             return
 
         try:
-            task_list = ListDashboardTasksService(session).execute()
+            selected_day = self._selected_date()
+            task_list = ListDashboardTasksService(session).execute(selected_day)
             self._populate_task_section(
                 self._overdue_tasks_layout,
                 task_list.overdue,
@@ -124,14 +140,14 @@ class DashboardPage(QWidget):
             self._populate_task_section(
                 self._pending_tasks_layout,
                 task_list.pending_today,
-                t("No pending tasks for today."),
+                t("No pending tasks for selected date."),
                 action_label=t("Complete"),
                 action=self._complete_task,
             )
             self._populate_task_section(
                 self._completed_tasks_layout,
                 task_list.completed_today,
-                t("No completed tasks for today."),
+                t("No completed tasks for selected date."),
                 action_label=t("Reopen"),
                 action=self._reopen_task,
             )
@@ -182,9 +198,21 @@ class DashboardPage(QWidget):
         return f"{task.due_date.isoformat()} - {title}"
 
     def _open_task_dialog(self) -> None:
-        dialog = TaskDialog(self, default_due_date=date.today())
+        dialog = TaskDialog(self, default_due_date=self._selected_date())
         if dialog.exec():
             self.load_tasks()
+            self.task_changed.emit()
+
+    def _select_today(self) -> None:
+        today = date.today()
+        today_qdate = QDate(today.year, today.month, today.day)
+        if self._selected_date_input.date() == today_qdate:
+            self.load_tasks()
+        else:
+            self._selected_date_input.setDate(today_qdate)
+
+    def _selected_date(self) -> date:
+        return self._selected_date_input.date().toPython()
 
     def _complete_task(self, task_id: int) -> None:
         self._change_task_completion(task_id, complete=True)
@@ -206,6 +234,7 @@ class DashboardPage(QWidget):
                 ReopenTaskService(session).execute(task_id)
             session.commit()
             self.load_tasks()
+            self.task_changed.emit()
         except Exception as exc:
             session.rollback()
             QMessageBox.critical(self, t("Could not update task"), t(str(exc)))

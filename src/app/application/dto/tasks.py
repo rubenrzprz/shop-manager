@@ -39,3 +39,9 @@ class DashboardTaskList:
     overdue: list[TaskListItem]
     pending_today: list[TaskListItem]
     completed_today: list[TaskListItem]
+
+
+@dataclass(frozen=True)
+class CalendarTaskDay:
+    day: date
+    tasks: list[TaskListItem]
