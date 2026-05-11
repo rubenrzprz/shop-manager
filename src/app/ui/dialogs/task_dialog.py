@@ -168,7 +168,7 @@ class TaskDialog(QDialog):
 
         def create_series(session):
             CreateTaskSeriesService(session).execute(data)
-            GenerateRecurringTasksService(session).execute(min(date.today(), starts_on))
+            GenerateRecurringTasksService(session).execute(date.today())
 
         self._run_task_write(create_series, t("Could not create task"))
 

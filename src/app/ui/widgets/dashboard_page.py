@@ -572,12 +572,16 @@ class DashboardPage(QWidget):
 
     @staticmethod
     def _recent_activity_label(order: DashboardOrderItem) -> str:
-        created_date = DashboardPage._local_date(order.created_at)
-        updated_date = DashboardPage._local_date(order.updated_at)
-        if updated_date > created_date:
-            return DashboardPage._days_ago_label(t("Updated"), updated_date)
+        if order.updated_at > order.created_at:
+            return DashboardPage._days_ago_label(
+                t("Updated"),
+                DashboardPage._local_date(order.updated_at),
+            )
 
-        return DashboardPage._days_ago_label(t("Created"), created_date)
+        return DashboardPage._days_ago_label(
+            t("Created"),
+            DashboardPage._local_date(order.created_at),
+        )
 
     @staticmethod
     def _local_date(value: datetime) -> date:
