@@ -22,7 +22,6 @@ from app.application.dto.tasks import TaskListItem
 from app.application.services.tasks import (
     CompleteTaskService,
     ListCalendarTasksService,
-    ListDashboardTasksService,
     ReopenTaskService,
 )
 from app.infrastructure.db.session import SessionLocal
@@ -249,7 +248,17 @@ class CalendarPage(QWidget):
             return
 
         try:
-            task_list = ListDashboardTasksService(session).execute(self._selected_day)
+            task_days = ListCalendarTasksService(session).execute(
+                self._selected_day,
+                self._selected_day,
+            )
+            selected_day_tasks = task_days[0].tasks if task_days else []
+            pending_tasks = [
+                task for task in selected_day_tasks if task.completed_at is None
+            ]
+            completed_tasks = [
+                task for task in selected_day_tasks if task.completed_at is not None
+            ]
             self._selected_day_group.setTitle(
                 f"{t('Tasks for')} {self._selected_day.isoformat()}"
             )
@@ -257,14 +266,14 @@ class CalendarPage(QWidget):
             self._completed_label.setText(t("Completed tasks"))
             self._populate_task_section(
                 self._pending_tasks_layout,
-                task_list.pending_today,
+                pending_tasks,
                 t("No pending tasks for selected date."),
                 action_label=t("Complete"),
                 action=self._complete_task,
             )
             self._populate_task_section(
                 self._completed_tasks_layout,
-                task_list.completed_today,
+                completed_tasks,
                 t("No completed tasks for selected date."),
                 action_label=t("Reopen"),
                 action=self._reopen_task,
