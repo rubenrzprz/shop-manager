@@ -12,6 +12,7 @@ from app.application.dto.orders import (
     UpdateOrderLineInput,
 )
 from app.application.dto.products import CreateProductInput, CreateProductVariantInput
+from app.application.dto.tasks import CreateTaskInput
 from app.application.services.customers import CreateCustomerService
 from app.application.services.orders import (
     CreateOrderService,
@@ -21,6 +22,7 @@ from app.application.services.orders import (
     UpdateOrderStatusService,
 )
 from app.application.services.products import CreateProductService
+from app.application.services.tasks import CreateTaskService
 from app.domain.enums import CustomerType, DiscountType, OrderStatus
 from app.infrastructure.db.models import Order, Task
 
@@ -472,6 +474,64 @@ def test_update_order_status_service_allows_forward_transitions(db_session):
 
     assert completed_order.status == OrderStatus.COMPLETED
     assert completed_order.completed_at is not None
+
+
+def test_update_order_status_service_clears_open_auto_follow_up_on_completion(
+    db_session,
+):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session)
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+        )
+    )
+    custom_task = CreateTaskService(db_session).execute(
+        CreateTaskInput(
+            title="Ask about pickup",
+            due_date=date(2026, 4, 20),
+            order_id=order.id,
+        )
+    )
+
+    order.status = OrderStatus.READY
+    db_session.flush()
+    UpdateOrderStatusService(db_session).execute(order.id, OrderStatus.COMPLETED)
+
+    auto_follow_ups = db_session.scalars(
+        select(Task)
+        .where(Task.order_id == order.id)
+        .where(Task.is_auto_order_follow_up.is_(True))
+        .where(Task.completed_at.is_(None))
+    ).all()
+    assert auto_follow_ups == []
+    assert db_session.get(Task, custom_task.id) is not None
+
+
+def test_update_order_status_service_clears_open_auto_follow_up_on_cancellation(
+    db_session,
+):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session)
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=date(2026, 4, 16),
+            lines=[CreateOrderLineInput(product_variant_id=variant.id, quantity=1)],
+        )
+    )
+
+    UpdateOrderStatusService(db_session).execute(order.id, OrderStatus.CANCELLED)
+
+    auto_follow_ups = db_session.scalars(
+        select(Task)
+        .where(Task.order_id == order.id)
+        .where(Task.is_auto_order_follow_up.is_(True))
+        .where(Task.completed_at.is_(None))
+    ).all()
+    assert auto_follow_ups == []
 
 
 def test_update_order_status_service_does_not_duplicate_existing_open_follow_up(db_session):

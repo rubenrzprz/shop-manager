@@ -276,6 +276,17 @@ class GenerateOrderFollowUpTasksService:
         self._session.flush()
         return follow_up
 
+    def delete_open_follow_ups_for_order(self, order_id: int) -> None:
+        open_follow_ups = self._session.scalars(
+            select(Task)
+            .where(Task.order_id == order_id)
+            .where(Task.is_auto_order_follow_up.is_(True))
+            .where(Task.completed_at.is_(None))
+        ).all()
+        for follow_up in open_follow_ups:
+            self._session.delete(follow_up)
+        self._session.flush()
+
     def schedule_next_for_task(self, task: Task) -> Task | None:
         if task.order_id is None:
             return None

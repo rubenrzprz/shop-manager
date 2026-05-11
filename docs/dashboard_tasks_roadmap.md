@@ -109,7 +109,8 @@ Implemented behavior:
 - Orders recovered or transitioned back into active statuses receive an open follow-up when one is
   missing.
 - Completing an automatic order follow-up schedules the next one if the order remains active.
-- Completed and cancelled orders should stop producing automatic follow-up reminders.
+- Completed and cancelled orders stop producing automatic follow-up reminders and clear open
+  automatic follow-ups.
 - Custom order reminders should remain independent from default follow-up reminders.
 
 ## Calendar View

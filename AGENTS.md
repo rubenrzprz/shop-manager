@@ -296,7 +296,8 @@ The project currently has these completed vertical slices:
 - Automatic order follow-up reminders are generated for active orders without an open automatic
   follow-up on startup, when draft orders are created, and when orders transition back into an
   active status. Completing one schedules the next follow-up when the order remains active;
-  completed and cancelled orders stop producing automatic follow-ups.
+  completed and cancelled orders stop producing automatic follow-ups and clear open automatic
+  follow-ups while preserving custom order-linked reminders.
 - See `docs/dashboard_tasks_roadmap.md` for the detailed implementation roadmap.
 
 ## Likely Next Steps

@@ -686,6 +686,10 @@ class UpdateOrderStatusService:
         self._session.flush()
         if target_status in ACTIVE_ORDER_FOLLOW_UP_STATUSES:
             GenerateOrderFollowUpTasksService(self._session).ensure_open_follow_up_for_order(order)
+        elif target_status in {OrderStatus.COMPLETED, OrderStatus.CANCELLED}:
+            GenerateOrderFollowUpTasksService(self._session).delete_open_follow_ups_for_order(
+                order.id
+            )
 
         return order
 
