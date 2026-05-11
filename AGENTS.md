@@ -156,14 +156,18 @@ The project currently has these completed vertical slices:
 - Dashboard Shell v1
   - dashboard is the first application tab
   - quick action buttons open create product/supplier/customer/order flows and settings
+  - polished dashboard layout uses shortcut chips, an orders overview column, and a daily tasks rail
+  - orders overview shows active order counts, due-soon orders, and recent orders
   - daily task sections show overdue, pending today, and completed today tasks
   - create standalone one-off tasks
+  - create standalone recurring reminders from the task dialog
   - create custom order-linked reminder tasks
   - generate recurring task occurrences from active task series
   - generate automatic active-order follow-up reminders
   - browse dashboard tasks by selected date
   - calendar tab shows a month grid with task markers/snippets by due date
   - create standalone reminders directly for the selected dashboard date
+  - edit task occurrences from the dashboard and calendar selected-day panels
   - mark tasks complete and reopen completed tasks
 - Product Management v1
   - create products
@@ -296,8 +300,7 @@ The project currently has these completed vertical slices:
   today through `today + task_generation_horizon_days`.
 - Generated recurring tasks should be unique per `task_series_id` and `due_date`.
 - Recurring series currently support daily, weekly, and monthly intervals.
-- Creating recurring series from the UI is deferred to the manual recurring reminders slice;
-  current support is persistence and generation services only.
+- Creating standalone recurring series from the task dialog is implemented.
 - Editing existing recurring series is deferred beyond manual recurring reminder creation.
 - `default_order_follow_up_days` is implemented as a typed setting, default `7`, allowed range
   `1` to `365`, and exposed in the settings UI.
@@ -315,15 +318,13 @@ The project currently has these completed vertical slices:
 
 When asked to propose the next logical step, consider this order:
 
-1. Manual recurring reminders
-   - create `TaskSeries` from the UI for standalone recurring reminders
-   - choose daily/weekly/monthly recurrence, interval, start date, and optional end date
-   - generate occurrences after save through the configured horizon
-   - defer editing existing series unless explicitly requested
-2. Dashboard/UI polish
-   - improve dashboard task layout and reminder ergonomics
+1. Dashboard/UI polish
+   - continue improving dashboard reminder ergonomics after real-world use
    - keep order-linked reminder creation contextual to the selected order
    - consider customizable task colors/categories for calendar and dashboard task blocks
+2. Recurring reminder polish
+   - edit future recurring occurrences or the whole recurring series
+   - consider advanced monthly rules such as the first or last day of a month
 3. Product category grouping polish
    - consider grouping the products page by category if filtering is not enough
    - consider category filters in product/variant pickers when order creation needs it

@@ -27,12 +27,16 @@ Initial dashboard sections:
   - customers
   - orders
   - settings
+- Orders overview
+  - active order counts
+  - due-soon orders
+  - recent orders
 - Daily tasks
   - overdue tasks
   - pending tasks due today
   - completed tasks for today
 
-Future dashboard sections may include stock alerts, recent orders, or shipment alerts.
+Future dashboard sections may include stock alerts or shipment alerts.
 
 ## Task Model Direction
 
@@ -85,8 +89,8 @@ The generation service must be idempotent. Running it repeatedly must not create
 
 Use a uniqueness rule equivalent to one generated task per `task_series_id` and `due_date`.
 
-Daily, weekly, and monthly recurrence intervals are implemented. Creating recurring series from
-the UI is planned after the calendar task view. Editing existing recurring series remains a later
+Daily, weekly, and monthly recurrence intervals are implemented. Creating standalone recurring
+series from the task dialog is implemented. Editing existing recurring series remains a later
 workflow beyond that first manual recurring-reminder slice.
 
 ## Order Follow-Up Reminders
@@ -134,16 +138,15 @@ Later options:
 
 - customizable task colors or task categories for calendar/dashboard blocks
 - reschedule tasks
-- edit one occurrence
-- edit future occurrences
+- edit future recurring occurrences
 - edit the whole recurrence series
 
 ## Manual Recurring Reminders
 
-Manual recurring reminders should let the operator create standalone `TaskSeries` rows from the UI
-after the calendar view exists.
+Manual recurring reminders let the operator create standalone `TaskSeries` rows from the task
+dialog.
 
-Expected v1 behavior:
+Implemented v1 behavior:
 
 - create a recurring reminder with title, notes, recurrence type, interval, start date, and
   optional end date
@@ -180,7 +183,8 @@ Expected v1 behavior:
    - completed with a Calendar tab month grid showing days with tasks
    - completed with standalone reminders defaulting to the selected date
 9. Manual recurring reminders
-   - create standalone recurring reminders from the UI
-   - generate occurrences after save
+   - completed with standalone recurring reminders from the task dialog
+   - completed occurrence generation after save
 10. Dashboard/UI polish
-   - improve task/reminder layout and dashboard ergonomics
+   - completed with shortcut chips, an orders overview column, and a daily tasks rail
+   - continue task/reminder ergonomics after real-world use
