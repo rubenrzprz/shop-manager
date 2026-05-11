@@ -132,6 +132,7 @@ def test_application_settings_service_defaults_task_generation_horizon_days(db_s
     settings = ApplicationSettingsService(db_session).get_settings()
 
     assert settings.task_generation_horizon_days == 90
+    assert settings.default_order_follow_up_days == 7
 
 
 def test_application_settings_service_saves_task_generation_horizon_days(db_session):
@@ -157,6 +158,31 @@ def test_application_settings_service_validates_task_generation_horizon_days(db_
         match="Task generation horizon days must be between 30 and 365.",
     ):
         service.set_task_generation_horizon_days(366)
+
+
+def test_application_settings_service_saves_default_order_follow_up_days(db_session):
+    service = ApplicationSettingsService(db_session)
+
+    service.set_default_order_follow_up_days(14)
+    db_session.commit()
+
+    assert ApplicationSettingsService(db_session).default_order_follow_up_days() == 14
+
+
+def test_application_settings_service_validates_default_order_follow_up_days(db_session):
+    service = ApplicationSettingsService(db_session)
+
+    with pytest.raises(
+        ValueError,
+        match="Default order follow-up days must be between 1 and 365.",
+    ):
+        service.set_default_order_follow_up_days(0)
+
+    with pytest.raises(
+        ValueError,
+        match="Default order follow-up days must be between 1 and 365.",
+    ):
+        service.set_default_order_follow_up_days(366)
 
 
 def test_application_settings_service_defaults_app_language_to_english(db_session):
