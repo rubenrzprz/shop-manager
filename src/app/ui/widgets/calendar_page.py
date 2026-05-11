@@ -252,6 +252,10 @@ class CalendarPage(QWidget):
 
     def eventFilter(self, source: QObject, event: QEvent) -> bool:
         if event.type() == QEvent.Type.MouseButtonPress:
+            task_id = source.property("calendarTaskId")
+            if task_id is not None:
+                self._open_task_edit_dialog(int(task_id))
+                return True
             ordinal = source.property("calendarDayOrdinal")
             if ordinal is not None:
                 self._select_day(date.fromordinal(int(ordinal)))
@@ -319,6 +323,7 @@ class CalendarPage(QWidget):
         for task in tasks:
             row = QHBoxLayout()
             label = QLabel(self._task_detail_label(task))
+            self._register_task_click_target(label, task)
             label.setWordWrap(True)
             label.setStyleSheet(self._task_detail_style(task))
             button = QPushButton(action_label)
@@ -327,8 +332,22 @@ class CalendarPage(QWidget):
             row.addWidget(button)
             layout.addLayout(row)
 
+    def _register_task_click_target(self, widget: QWidget, task: TaskListItem) -> None:
+        if task.is_auto_order_follow_up:
+            return
+
+        widget.setProperty("calendarTaskId", task.id)
+        widget.setCursor(Qt.PointingHandCursor)
+        widget.installEventFilter(self)
+
     def _open_task_dialog(self) -> None:
         dialog = TaskDialog(self, default_due_date=self._selected_day)
+        if dialog.exec():
+            self.load_calendar()
+            self.task_changed.emit()
+
+    def _open_task_edit_dialog(self, task_id: int) -> None:
+        dialog = TaskDialog(self, task_id=task_id)
         if dialog.exec():
             self.load_calendar()
             self.task_changed.emit()

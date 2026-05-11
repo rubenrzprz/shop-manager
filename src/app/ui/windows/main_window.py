@@ -31,9 +31,11 @@ class MainWindow(QMainWindow):
         self._orders_page = OrdersPage()
         self._settings_page = SettingsPage()
         self._dashboard_page.action_requested.connect(self._run_dashboard_action)
+        self._dashboard_page.order_requested.connect(self._open_order_from_dashboard)
         self._dashboard_page.task_changed.connect(self._calendar_page.load_calendar)
         self._calendar_page.task_changed.connect(self._dashboard_page.load_tasks)
         self._settings_page.language_changed.connect(lambda _language: self.retranslate_ui())
+        self._orders_page.order_changed.connect(self._dashboard_page.reload_dashboard)
 
         self._tabs.addTab(self._dashboard_page, "")
         self._tabs.addTab(self._calendar_page, "")
@@ -68,6 +70,7 @@ class MainWindow(QMainWindow):
 
     def _run_dashboard_action(self, action: str) -> None:
         actions = {
+            "calendar": (1, None),
             "new_product": (2, self._products_page.open_create_dialog),
             "new_supplier": (4, self._suppliers_page.open_create_dialog),
             "new_customer": (5, self._customers_page.open_create_dialog),
@@ -82,6 +85,10 @@ class MainWindow(QMainWindow):
         self._tabs.setCurrentIndex(tab_index)
         if callback is not None:
             callback()
+
+    def _open_order_from_dashboard(self, order_id: int) -> None:
+        self._tabs.setCurrentIndex(6)
+        self._orders_page.open_order_for_edit(order_id)
 
     def _load_language(self) -> None:
         try:
