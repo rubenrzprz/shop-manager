@@ -1,10 +1,15 @@
 from app.infrastructure.db.models.customers import Customer
 from app.infrastructure.db.models.orders import Order, OrderLine, OrderSupplier, Shipment
-from app.infrastructure.db.models.products import Product, ProductCategory, ProductImage, ProductVariant
+from app.infrastructure.db.models.products import (
+    Product,
+    ProductCategory,
+    ProductImage,
+    ProductVariant,
+)
 from app.infrastructure.db.models.settings import ApplicationSetting
 from app.infrastructure.db.models.stock import StockMovement
 from app.infrastructure.db.models.suppliers import Supplier, SupplierContact
-from app.infrastructure.db.models.tasks import Task
+from app.infrastructure.db.models.tasks import Task, TaskSeries
 
 __all__ = [
     "Customer",
@@ -21,4 +26,5 @@ __all__ = [
     "OrderSupplier",
     "StockMovement",
     "Task",
+    "TaskSeries",
 ]

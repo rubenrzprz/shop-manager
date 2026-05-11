@@ -158,6 +158,7 @@ The project currently has these completed vertical slices:
   - quick action buttons open create product/supplier/customer/order flows and settings
   - daily task sections show overdue, pending today, and completed today tasks
   - create standalone one-off tasks
+  - generate recurring task occurrences from active task series
   - mark tasks complete and reopen completed tasks
 - Product Management v1
   - create products
@@ -198,6 +199,7 @@ The project currently has these completed vertical slices:
   - settings tab
   - strict order workflow toggle
   - configurable enabled order statuses
+  - configurable recurring task generation horizon
 - Spanish Localization v1
   - `app_language` setting
   - lightweight UI translation helper
@@ -271,16 +273,19 @@ The project currently has these completed vertical slices:
   tasks for that same day.
 - Standalone one-off `Task` rows are implemented with title, notes, due date, and completed
   timestamp.
-- Recurring tasks should use a `TaskSeries` plus generated `Task` occurrences:
-  - `TaskSeries`: title, notes, optional order, recurrence type/interval, starts on, optional ends
-    on, active flag
-  - `Task`: optional series, optional order, title/notes snapshot, due date, completed timestamp
-- Recurring occurrences should be generated only through a configurable horizon, not forever.
-- Planned setting: `task_generation_horizon_days`, default `90`, likely allowed range `30` to
-  `365`.
-- On app startup, run an idempotent generation service that creates missing recurring task
-  occurrences through `today + task_generation_horizon_days`.
+- Recurring tasks use `TaskSeries` plus generated `Task` occurrences:
+  - `TaskSeries`: title, notes, recurrence type/interval, starts on, optional ends on, active flag
+  - `Task`: optional series, title/notes snapshot, due date, completed timestamp
+- Recurring occurrences are generated only through a configurable horizon, not forever.
+- `task_generation_horizon_days` is implemented as a typed setting, default `90`, allowed range
+  `30` to `365`, and exposed in the settings UI.
+- On app startup, an idempotent generation service creates missing recurring task occurrences from
+  today through `today + task_generation_horizon_days`.
 - Generated recurring tasks should be unique per `task_series_id` and `due_date`.
+- Recurring series currently support daily, weekly, and monthly intervals.
+- Creating/editing recurring series from the UI is deferred; current support is persistence and
+  generation services.
+- Order-linked task fields are still deferred to the order-bound reminder slice.
 - Planned order follow-up setting: `default_order_follow_up_days`, likely default `7`.
 - Automatic order follow-up reminders should apply to active orders and stop when orders are
   completed or cancelled.
@@ -290,27 +295,23 @@ The project currently has these completed vertical slices:
 
 When asked to propose the next logical step, consider this order:
 
-1. Recurring task generation
-   - add task series persistence
-   - add `task_generation_horizon_days`
-   - generate missing occurrences on startup through the configured horizon
-2. Order-bound reminders
+1. Order-bound reminders
    - add custom order-linked tasks
    - add automatic order follow-up reminders with `default_order_follow_up_days`
-3. Calendar task view
+2. Calendar task view
    - browse tasks by date
    - create reminders directly on selected dates
-4. Product category grouping polish
+3. Product category grouping polish
    - consider grouping the products page by category if filtering is not enough
    - consider category filters in product/variant pickers when order creation needs it
-5. Localization polish
+4. Localization polish
    - translate any newly added UI strings through the existing helper
    - consider service-layer message codes if application validation errors need full localization
    - consider broader formatting localization for currency/date display
-6. Stock movements
+5. Stock movements
    - reduce stock when an order reaches the appropriate status
    - do not mix stock behavior into basic order create/list
-7. Shipment workflows
+6. Shipment workflows
    - create/update shipment info for orders
 
 Prefer one small vertical slice per branch.

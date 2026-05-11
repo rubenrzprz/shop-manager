@@ -50,6 +50,16 @@ _TRANSLATIONS = {
         "Could not update task": "No se pudo actualizar la tarea",
         "Task title is required.": "El título de la tarea es obligatorio.",
         "Task not found.": "No se encontró la tarea.",
+        "Task series title is required.": "El título de la serie de tareas es obligatorio.",
+        "Task recurrence interval must be at least 1.": (
+            "El intervalo de repetición de la tarea debe ser al menos 1."
+        ),
+        "Task series end date cannot be before the start date.": (
+            "La fecha de fin de la serie de tareas no puede ser anterior a la fecha de inicio."
+        ),
+        "Task generation horizon days must be between 30 and 365.": (
+            "Los días del horizonte de generación de tareas deben estar entre 30 y 365."
+        ),
         "Products": "Productos",
         "Categories": "Categorías",
         "Product Categories": "Categorías de producto",
@@ -320,6 +330,12 @@ _TRANSLATIONS = {
         "English": "Inglés",
         "Spanish": "Español",
         "Strict order workflow": "Flujo estricto de pedidos",
+        "Task generation horizon": "Horizonte de generación de tareas",
+        "days": "días",
+        "Recurring task occurrences are generated this many days ahead.": (
+            "Las ocurrencias de tareas recurrentes se generan con esta cantidad de días "
+            "de antelación."
+        ),
         "Enabled order statuses": "Estados de pedido habilitados",
         "Choose which statuses are used when advancing or reverting orders. Draft, completed, and cancelled are always required.": (
             "Elige qué estados se usan al avanzar o revertir pedidos. Borrador, completado "

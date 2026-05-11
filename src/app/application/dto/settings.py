@@ -7,6 +7,7 @@ from app.domain.enums import OrderStatus
 class ApplicationSettingsItem:
     strict_order_workflow_enabled: bool = False
     app_language: str = "en"
+    task_generation_horizon_days: int = 90
     enabled_order_statuses: tuple[OrderStatus, ...] = (
         OrderStatus.DRAFT,
         OrderStatus.CONFIRMED,

@@ -1,10 +1,19 @@
+from calendar import monthrange
+from math import ceil
 from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.application.dto.tasks import CreateTaskInput, DashboardTaskList, TaskListItem
-from app.infrastructure.db.models import Task
+from app.application.dto.tasks import (
+    CreateTaskInput,
+    CreateTaskSeriesInput,
+    DashboardTaskList,
+    TaskListItem,
+)
+from app.application.services.settings import ApplicationSettingsService
+from app.domain.enums import TaskRecurrenceType
+from app.infrastructure.db.models import Task, TaskSeries
 
 
 class CreateTaskService:
@@ -31,15 +40,115 @@ class CreateTaskService:
             raise ValueError("Task title is required.")
 
 
+class CreateTaskSeriesService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, data: CreateTaskSeriesInput) -> TaskSeries:
+        self._validate_task_series_input(data)
+
+        series = TaskSeries(
+            title=data.title.strip(),
+            notes=data.notes,
+            recurrence_type=data.recurrence_type,
+            recurrence_interval=data.recurrence_interval,
+            starts_on=data.starts_on,
+            ends_on=data.ends_on,
+            is_active=True,
+        )
+
+        self._session.add(series)
+        self._session.flush()
+
+        return series
+
+    @staticmethod
+    def _validate_task_series_input(data: CreateTaskSeriesInput) -> None:
+        if not data.title or not data.title.strip():
+            raise ValueError("Task series title is required.")
+        if data.recurrence_interval < 1:
+            raise ValueError("Task recurrence interval must be at least 1.")
+        if data.ends_on is not None and data.ends_on < data.starts_on:
+            raise ValueError("Task series end date cannot be before the start date.")
+
+
+class GenerateRecurringTasksService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, today: date | None = None) -> int:
+        generation_start = today or date.today()
+        horizon_days = ApplicationSettingsService(self._session).task_generation_horizon_days()
+        generation_until = generation_start + timedelta(days=horizon_days)
+        series_list = self._session.scalars(
+            select(TaskSeries)
+            .where(TaskSeries.is_active.is_(True))
+            .where(TaskSeries.starts_on <= generation_until)
+            .where((TaskSeries.ends_on.is_(None)) | (TaskSeries.ends_on >= generation_start))
+            .order_by(TaskSeries.id)
+        ).all()
+        if not series_list:
+            return 0
+
+        existing_due_dates_by_series_id = self._existing_due_dates_by_series_id(
+            series_list,
+            generation_start,
+            generation_until,
+        )
+        created_count = 0
+        for series in series_list:
+            existing_due_dates = existing_due_dates_by_series_id.get(series.id, set())
+            for due_date in _iter_occurrence_dates(
+                series,
+                generation_start,
+                generation_until,
+            ):
+                if due_date in existing_due_dates:
+                    continue
+
+                self._session.add(
+                    Task(
+                        task_series_id=series.id,
+                        title=series.title,
+                        notes=series.notes,
+                        due_date=due_date,
+                    )
+                )
+                existing_due_dates.add(due_date)
+                created_count += 1
+
+        self._session.flush()
+        return created_count
+
+    def _existing_due_dates_by_series_id(
+        self,
+        series_list: list[TaskSeries],
+        generation_start: date,
+        generation_until: date,
+    ) -> dict[int, set[date]]:
+        series_ids = [series.id for series in series_list]
+        rows = self._session.execute(
+            select(Task.task_series_id, Task.due_date)
+            .where(Task.task_series_id.in_(series_ids))
+            .where(Task.due_date >= generation_start)
+            .where(Task.due_date <= generation_until)
+        ).all()
+        due_dates_by_series_id: dict[int, set[date]] = {}
+        for series_id, due_date in rows:
+            if series_id is None:
+                continue
+            due_dates_by_series_id.setdefault(series_id, set()).add(due_date)
+
+        return due_dates_by_series_id
+
+
 class ListDashboardTasksService:
     def __init__(self, session: Session) -> None:
         self._session = session
 
     def execute(self, day: date | None = None) -> DashboardTaskList:
         selected_day = day or date.today()
-        completed_start_utc = datetime.combine(selected_day, time.min).astimezone(
-            timezone.utc
-        )
+        completed_start_utc = datetime.combine(selected_day, time.min).astimezone(timezone.utc)
         completed_end_utc = datetime.combine(
             selected_day + timedelta(days=1),
             time.min,
@@ -110,3 +219,84 @@ class ReopenTaskService:
         self._session.flush()
 
         return task
+
+
+def _iter_occurrence_dates(
+    series: TaskSeries,
+    generation_start: date,
+    generation_until: date,
+) -> list[date]:
+    occurrence_dates: list[date] = []
+    occurrence_index = _first_occurrence_index(
+        series.starts_on,
+        series.recurrence_type,
+        series.recurrence_interval,
+        generation_start,
+    )
+    current_date = _next_occurrence_date(
+        series.starts_on,
+        series.recurrence_type,
+        series.recurrence_interval,
+        occurrence_index,
+    )
+    generation_end = min(
+        generation_until,
+        series.ends_on if series.ends_on is not None else generation_until,
+    )
+    while current_date <= generation_end:
+        if current_date >= generation_start:
+            occurrence_dates.append(current_date)
+        current_date = _next_occurrence_date(
+            series.starts_on,
+            series.recurrence_type,
+            series.recurrence_interval,
+            occurrence_index + 1,
+        )
+        occurrence_index += 1
+
+    return occurrence_dates
+
+
+def _first_occurrence_index(
+    starts_on: date,
+    recurrence_type: TaskRecurrenceType,
+    interval: int,
+    generation_start: date,
+) -> int:
+    if generation_start <= starts_on:
+        return 0
+
+    if recurrence_type == TaskRecurrenceType.DAILY:
+        return ceil((generation_start - starts_on).days / interval)
+    if recurrence_type == TaskRecurrenceType.WEEKLY:
+        return ceil((generation_start - starts_on).days / (interval * 7))
+    if recurrence_type == TaskRecurrenceType.MONTHLY:
+        month_delta = (generation_start.year - starts_on.year) * 12
+        month_delta += generation_start.month - starts_on.month
+        return max(0, month_delta // interval)
+
+    raise ValueError("Task recurrence type is unsupported.")
+
+
+def _next_occurrence_date(
+    starts_on: date,
+    recurrence_type: TaskRecurrenceType,
+    interval: int,
+    occurrence_index: int,
+) -> date:
+    if recurrence_type == TaskRecurrenceType.DAILY:
+        return starts_on + timedelta(days=interval * occurrence_index)
+    if recurrence_type == TaskRecurrenceType.WEEKLY:
+        return starts_on + timedelta(weeks=interval * occurrence_index)
+    if recurrence_type == TaskRecurrenceType.MONTHLY:
+        return _add_months(starts_on, interval * occurrence_index)
+
+    raise ValueError("Task recurrence type is unsupported.")
+
+
+def _add_months(current_date: date, months: int) -> date:
+    month_index = current_date.month - 1 + months
+    year = current_date.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(current_date.day, monthrange(year, month)[1])
+    return date(year, month, day)
