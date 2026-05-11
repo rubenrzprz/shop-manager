@@ -31,6 +31,8 @@ class MainWindow(QMainWindow):
         self._orders_page = OrdersPage()
         self._settings_page = SettingsPage()
         self._dashboard_page.action_requested.connect(self._run_dashboard_action)
+        self._dashboard_page.task_changed.connect(self._calendar_page.load_calendar)
+        self._calendar_page.task_changed.connect(self._dashboard_page.load_tasks)
         self._settings_page.language_changed.connect(lambda _language: self.retranslate_ui())
 
         self._tabs.addTab(self._dashboard_page, "")

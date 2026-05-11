@@ -26,6 +26,7 @@ from app.ui.localization import t
 
 class DashboardPage(QWidget):
     action_requested = Signal(str)
+    task_changed = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -200,6 +201,7 @@ class DashboardPage(QWidget):
         dialog = TaskDialog(self, default_due_date=self._selected_date())
         if dialog.exec():
             self.load_tasks()
+            self.task_changed.emit()
 
     def _select_today(self) -> None:
         today = date.today()
@@ -232,6 +234,7 @@ class DashboardPage(QWidget):
                 ReopenTaskService(session).execute(task_id)
             session.commit()
             self.load_tasks()
+            self.task_changed.emit()
         except Exception as exc:
             session.rollback()
             QMessageBox.critical(self, t("Could not update task"), t(str(exc)))

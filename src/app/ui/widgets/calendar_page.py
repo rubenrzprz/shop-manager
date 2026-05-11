@@ -1,7 +1,7 @@
 from calendar import Calendar, month_name
 from datetime import date
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -31,6 +31,8 @@ from app.ui.localization import t
 
 
 class CalendarPage(QWidget):
+    task_changed = Signal()
+
     def __init__(self) -> None:
         super().__init__()
 
@@ -302,6 +304,7 @@ class CalendarPage(QWidget):
         dialog = TaskDialog(self, default_due_date=self._selected_day)
         if dialog.exec():
             self.load_calendar()
+            self.task_changed.emit()
 
     def _complete_task(self, task_id: int) -> None:
         self._change_task_completion(task_id, complete=True)
@@ -323,6 +326,7 @@ class CalendarPage(QWidget):
                 ReopenTaskService(session).execute(task_id)
             session.commit()
             self.load_calendar()
+            self.task_changed.emit()
         except Exception as exc:
             session.rollback()
             QMessageBox.critical(self, t("Could not update task"), t(str(exc)))
