@@ -1,7 +1,7 @@
 from calendar import Calendar, month_name
 from datetime import date
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -186,7 +186,7 @@ class CalendarPage(QWidget):
     def _calendar_cell_widget(self, day: date, tasks: list[TaskListItem]) -> QWidget:
         cell = QFrame()
         cell.setObjectName("calendarDayCell")
-        cell.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self._register_calendar_click_target(cell, day)
         if day == self._selected_day:
             cell.setStyleSheet(
                 "QFrame#calendarDayCell { background: #dbeafe; border: 1px solid #2563eb; }"
@@ -205,6 +205,7 @@ class CalendarPage(QWidget):
         layout.setSpacing(3)
 
         day_label = QLabel(str(day.day))
+        self._register_calendar_click_target(day_label, day)
         day_label.setStyleSheet(
             "color: #6b7280;" if day.month != self._display_month else "font-weight: 600;"
         )
@@ -212,6 +213,7 @@ class CalendarPage(QWidget):
 
         for task in tasks[:2]:
             task_label = QLabel(self._task_title(task))
+            self._register_calendar_click_target(task_label, day)
             task_label.setToolTip(self._task_detail_label(task))
             task_label.setFixedHeight(18)
             task_label.setTextFormat(Qt.PlainText)
@@ -219,6 +221,7 @@ class CalendarPage(QWidget):
             layout.addWidget(task_label)
         if len(tasks) > 2:
             more_label = QLabel(t("+ {count} more").format(count=len(tasks) - 2))
+            self._register_calendar_click_target(more_label, day)
             more_label.setStyleSheet("color: #374151; font-size: 11px;")
             layout.addWidget(more_label)
         layout.addStretch()
@@ -235,10 +238,25 @@ class CalendarPage(QWidget):
         if selected_day is None:
             return
 
+        self._select_day(selected_day)
+
+    def _select_day(self, selected_day: date) -> None:
         self._selected_day = selected_day
         self._display_year = selected_day.year
         self._display_month = selected_day.month
         self.load_calendar()
+
+    def _register_calendar_click_target(self, widget: QWidget, day: date) -> None:
+        widget.setProperty("calendarDayOrdinal", day.toordinal())
+        widget.installEventFilter(self)
+
+    def eventFilter(self, source: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.MouseButtonPress:
+            ordinal = source.property("calendarDayOrdinal")
+            if ordinal is not None:
+                self._select_day(date.fromordinal(int(ordinal)))
+                return True
+        return super().eventFilter(source, event)
 
     def _load_selected_day_tasks(self) -> None:
         try:
