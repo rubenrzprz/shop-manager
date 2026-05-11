@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.application.dto.tasks import (
+    CalendarTaskDay,
     CreateTaskInput,
     CreateTaskSeriesInput,
     DashboardTaskList,
@@ -206,6 +207,33 @@ class ListDashboardTasksService:
         )
 
 
+class ListCalendarTasksService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, start_day: date, end_day: date) -> list[CalendarTaskDay]:
+        if end_day < start_day:
+            raise ValueError("Calendar end date cannot be before start date.")
+
+        tasks = self._session.scalars(
+            select(Task)
+            .options(joinedload(Task.order))
+            .where(Task.due_date >= start_day)
+            .where(Task.due_date <= end_day)
+            .order_by(Task.due_date, Task.completed_at.is_not(None), Task.id)
+        ).all()
+        tasks_by_day: dict[date, list[TaskListItem]] = {}
+        for task in tasks:
+            tasks_by_day.setdefault(task.due_date, []).append(
+                ListDashboardTasksService._to_list_item(task)
+            )
+
+        return [
+            CalendarTaskDay(day=day, tasks=tasks)
+            for day, tasks in sorted(tasks_by_day.items())
+        ]
+
+
 class CompleteTaskService:
     def __init__(self, session: Session) -> None:
         self._session = session
@@ -306,10 +334,11 @@ class GenerateOrderFollowUpTasksService:
             self._session
         ).default_order_follow_up_days()
         completed_day = (task.completed_at or datetime.now(timezone.utc)).date()
+        next_anchor_day = max(task.due_date, completed_day)
         next_task = self._new_follow_up_task(
             order,
-            completed_day,
-            due_date=completed_day + timedelta(days=follow_up_days),
+            next_anchor_day,
+            due_date=next_anchor_day + timedelta(days=follow_up_days),
         )
         self._session.add(next_task)
         self._session.flush()

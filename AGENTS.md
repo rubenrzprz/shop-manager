@@ -161,6 +161,9 @@ The project currently has these completed vertical slices:
   - create custom order-linked reminder tasks
   - generate recurring task occurrences from active task series
   - generate automatic active-order follow-up reminders
+  - browse dashboard tasks by selected date
+  - calendar tab shows a month grid with task markers/snippets by due date
+  - create standalone reminders directly for the selected dashboard date
   - mark tasks complete and reopen completed tasks
 - Product Management v1
   - create products
@@ -274,6 +277,11 @@ The project currently has these completed vertical slices:
   automatic active-order follow-up reminders.
 - Daily task sections should show overdue tasks, pending tasks for the selected day, and completed
   tasks for that same day.
+- Dashboard task browsing by selected date is implemented with a date picker; standalone reminders
+  created from the dashboard default to the selected date.
+- Calendar tab browsing is implemented as a month grid with task snippets per day plus a selected
+  day task panel; standalone reminders created from the calendar default to the selected day.
+  Month cells use capped colored task blocks and a "+ N more" marker to avoid overcrowding.
 - Standalone one-off `Task` rows are implemented with title, notes, due date, and completed
   timestamp.
 - Custom order-linked `Task` rows use optional `order_id`; the order page can create a reminder
@@ -296,6 +304,8 @@ The project currently has these completed vertical slices:
 - Automatic order follow-up reminders are generated for active orders without an open automatic
   follow-up on startup, when draft orders are created, and when orders transition back into an
   active status. Completing one schedules the next follow-up when the order remains active;
+  future-due follow-ups schedule the next reminder from the original due date rather than an early
+  completion date.
   completed and cancelled orders stop producing automatic follow-ups and clear open automatic
   follow-ups while preserving custom order-linked reminders. Completed automatic follow-ups cannot
   be reopened once their order is completed or cancelled.
@@ -305,28 +315,26 @@ The project currently has these completed vertical slices:
 
 When asked to propose the next logical step, consider this order:
 
-1. Calendar task view
-   - browse tasks by date
-   - create reminders directly on selected dates
-2. Manual recurring reminders
+1. Manual recurring reminders
    - create `TaskSeries` from the UI for standalone recurring reminders
    - choose daily/weekly/monthly recurrence, interval, start date, and optional end date
    - generate occurrences after save through the configured horizon
    - defer editing existing series unless explicitly requested
-3. Dashboard/UI polish
+2. Dashboard/UI polish
    - improve dashboard task layout and reminder ergonomics
    - keep order-linked reminder creation contextual to the selected order
-4. Product category grouping polish
+   - consider customizable task colors/categories for calendar and dashboard task blocks
+3. Product category grouping polish
    - consider grouping the products page by category if filtering is not enough
    - consider category filters in product/variant pickers when order creation needs it
-5. Localization polish
+4. Localization polish
    - translate any newly added UI strings through the existing helper
    - consider service-layer message codes if application validation errors need full localization
    - consider broader formatting localization for currency/date display
-6. Stock movements
+5. Stock movements
    - reduce stock when an order reaches the appropriate status
    - do not mix stock behavior into basic order create/list
-7. Shipment workflows
+6. Shipment workflows
    - create/update shipment info for orders
 
 Prefer one small vertical slice per branch.

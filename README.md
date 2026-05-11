@@ -19,14 +19,13 @@ application services to keep business logic out of the interface layer.
 - 🧾 Orders: create, edit, calculate totals, apply discounts, validate deadlines
 - 🔁 Order workflows: configurable statuses, advance/revert/cancel/recover actions
 - ✅ Tasks: create one-off and order-linked reminders, generate recurring and active-order
-  follow-up reminders, list daily tasks, complete and reopen tasks
+  follow-up reminders, browse tasks by selected date or month grid, complete and reopen tasks
 - ⚙️ Settings: typed application settings backed by the database
 - 🌐 Localization: English and Spanish UI labels/messages
 - 🏠 Dashboard shell: entry tab with quick actions and daily task reminders
 
 ## What Is Coming 🧭
 
-- 📅 Calendar-based task planning
 - 🔁 Manual recurring reminder creation
 - 🧭 Dashboard and reminder UI polish
 - 🏷️ Product category grouping polish
@@ -159,18 +158,16 @@ SQLAlchemy models stay behind service boundaries.
 
 Near-term implementation path:
 
-1. Calendar view
-   - browse tasks by date
-   - create reminders directly for selected days
-2. Manual recurring reminders
+1. Manual recurring reminders
    - create standalone recurring task series from the UI
    - generate occurrences after save
-3. Dashboard and reminder UI polish
+2. Dashboard and reminder UI polish
    - improve the dashboard task layout and reminder ergonomics
-4. Product category browsing polish
+   - consider customizable task colors for calendar/dashboard blocks
+3. Product category browsing polish
    - consider grouping the product table by assigned categories if filtering is not enough
    - consider category filters in order product/variant selection
-5. Stock and shipment workflows
+4. Stock and shipment workflows
 
 See [docs/dashboard_tasks_roadmap.md](docs/dashboard_tasks_roadmap.md) for the dashboard and
 reminder design.
