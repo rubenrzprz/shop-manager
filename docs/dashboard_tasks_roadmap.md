@@ -51,6 +51,8 @@ Implemented model split:
   - active flag
 - `Task`
   - optional `task_series_id`
+  - optional `order_id`
+  - automatic order follow-up flag
   - title snapshot
   - notes snapshot
   - due date
@@ -83,22 +85,24 @@ The generation service must be idempotent. Running it repeatedly must not create
 
 Use a uniqueness rule equivalent to one generated task per `task_series_id` and `due_date`.
 
-Daily, weekly, and monthly recurrence intervals are implemented. Creating and editing recurring
-series from the UI remains a later workflow.
+Daily, weekly, and monthly recurrence intervals are implemented. Creating recurring series from
+the UI is planned after the calendar task view. Editing existing recurring series remains a later
+workflow beyond that first manual recurring-reminder slice.
 
 ## Order Follow-Up Reminders
 
-Order reminders should support two modes:
+Order reminders support two modes:
 
 - custom one-off reminders linked to an order
 - automatic follow-up reminders for active orders
 
-Planned setting:
+Implemented setting:
 
 - `default_order_follow_up_days`
-- likely default: `7`
+- default: `7`
+- allowed range: `1` to `365`
 
-Expected behavior:
+Implemented behavior:
 
 - Active orders can receive periodic "check order status" reminders.
 - Completing an automatic order follow-up schedules the next one if the order remains active.
@@ -123,6 +127,20 @@ Later options:
 - edit future occurrences
 - edit the whole recurrence series
 
+## Manual Recurring Reminders
+
+Manual recurring reminders should let the operator create standalone `TaskSeries` rows from the UI
+after the calendar view exists.
+
+Expected v1 behavior:
+
+- create a recurring reminder with title, notes, recurrence type, interval, start date, and
+  optional end date
+- generate missing occurrences immediately after saving through the configured
+  `task_generation_horizon_days`
+- keep generated occurrence title/notes as snapshots
+- defer editing existing series until after creation is useful in day-to-day use
+
 ## Suggested Slice Order
 
 1. Dashboard shell
@@ -143,11 +161,14 @@ Later options:
    - completed with task series table, recurrence fields, `task_generation_horizon_days`, and
      startup generation service
 6. Order-bound tasks
-   - optional `order_id`
-   - create custom reminders from orders
+   - completed with optional `order_id` and custom reminders from orders
 7. Default order follow-up reminders
-   - `default_order_follow_up_days`
-   - automatic active-order reminders
+   - completed with `default_order_follow_up_days` and automatic active-order reminders
 8. Calendar task view
    - browse days
    - create reminders from selected date
+9. Manual recurring reminders
+   - create standalone recurring reminders from the UI
+   - generate occurrences after save
+10. Dashboard/UI polish
+   - improve task/reminder layout and dashboard ergonomics
