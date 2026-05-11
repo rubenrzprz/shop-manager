@@ -12,8 +12,11 @@ STRICT_ORDER_WORKFLOW_ENABLED_KEY = "strict_order_workflow_enabled"
 APP_LANGUAGE_KEY = "app_language"
 ENABLED_ORDER_STATUSES_KEY = "enabled_order_statuses"
 TASK_GENERATION_HORIZON_DAYS_KEY = "task_generation_horizon_days"
+DEFAULT_ORDER_FOLLOW_UP_DAYS_KEY = "default_order_follow_up_days"
 MIN_TASK_GENERATION_HORIZON_DAYS = 30
 MAX_TASK_GENERATION_HORIZON_DAYS = 365
+MIN_DEFAULT_ORDER_FOLLOW_UP_DAYS = 1
+MAX_DEFAULT_ORDER_FOLLOW_UP_DAYS = 365
 SUPPORTED_APP_LANGUAGES = {"en", "es"}
 ORDER_STATUS_WORKFLOW = (
     OrderStatus.DRAFT,
@@ -42,6 +45,7 @@ class ApplicationSettingsService:
             strict_order_workflow_enabled=self.strict_order_workflow_enabled(),
             app_language=self.app_language(),
             task_generation_horizon_days=self.task_generation_horizon_days(),
+            default_order_follow_up_days=self.default_order_follow_up_days(),
             enabled_order_statuses=self.enabled_order_statuses(),
         )
 
@@ -54,12 +58,23 @@ class ApplicationSettingsService:
     def task_generation_horizon_days(self) -> int:
         return self._get_int(TASK_GENERATION_HORIZON_DAYS_KEY, default=90)
 
+    def default_order_follow_up_days(self) -> int:
+        return self._get_int(DEFAULT_ORDER_FOLLOW_UP_DAYS_KEY, default=7)
+
     def set_task_generation_horizon_days(self, value: int) -> None:
         self._validate_task_generation_horizon_days(value)
         self._set_int(
             TASK_GENERATION_HORIZON_DAYS_KEY,
             value,
             "Number of future days generated for recurring task occurrences.",
+        )
+
+    def set_default_order_follow_up_days(self, value: int) -> None:
+        self._validate_default_order_follow_up_days(value)
+        self._set_int(
+            DEFAULT_ORDER_FOLLOW_UP_DAYS_KEY,
+            value,
+            "Number of days between automatic active-order follow-up reminders.",
         )
 
     def set_app_language(self, value: str) -> None:
@@ -162,6 +177,8 @@ class ApplicationSettingsService:
 
         if key == TASK_GENERATION_HORIZON_DAYS_KEY:
             self._validate_task_generation_horizon_days(value)
+        if key == DEFAULT_ORDER_FOLLOW_UP_DAYS_KEY:
+            self._validate_default_order_follow_up_days(value)
 
         return value
 
@@ -282,6 +299,18 @@ class ApplicationSettingsService:
                 "Task generation horizon days must be between "
                 f"{MIN_TASK_GENERATION_HORIZON_DAYS} and "
                 f"{MAX_TASK_GENERATION_HORIZON_DAYS}."
+            )
+
+    @staticmethod
+    def _validate_default_order_follow_up_days(value: int) -> None:
+        if (
+            value < MIN_DEFAULT_ORDER_FOLLOW_UP_DAYS
+            or value > MAX_DEFAULT_ORDER_FOLLOW_UP_DAYS
+        ):
+            raise ValueError(
+                "Default order follow-up days must be between "
+                f"{MIN_DEFAULT_ORDER_FOLLOW_UP_DAYS} and "
+                f"{MAX_DEFAULT_ORDER_FOLLOW_UP_DAYS}."
             )
 
     @staticmethod

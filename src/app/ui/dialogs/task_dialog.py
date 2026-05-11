@@ -1,11 +1,12 @@
 from datetime import date
 
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
@@ -20,10 +21,17 @@ from app.ui.localization import t
 
 
 class TaskDialog(QDialog):
-    def __init__(self, parent=None, default_due_date: date | None = None) -> None:
+    def __init__(
+        self,
+        parent=None,
+        default_due_date: date | None = None,
+        default_order_id: int | None = None,
+        default_order_label: str | None = None,
+    ) -> None:
         super().__init__(parent)
 
-        self.setWindowTitle(t("Create Task"))
+        self._order_id = default_order_id
+        self.setWindowTitle(t("Create Order Reminder") if self._order_id else t("Create Task"))
         self.resize(420, 280)
 
         self._title_input = QLineEdit()
@@ -35,6 +43,11 @@ class TaskDialog(QDialog):
         self._notes_input.setFixedHeight(100)
 
         form = QFormLayout()
+        if self._order_id is not None:
+            order_label = QLabel(default_order_label or str(self._order_id))
+            order_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            order_label.setMinimumHeight(self._title_input.sizeHint().height())
+            form.addRow(t("Order"), order_label)
         form.addRow(t("Title"), self._title_input)
         form.addRow(t("Due date"), self._due_date_input)
         form.addRow(t("Notes"), self._notes_input)
@@ -54,6 +67,7 @@ class TaskDialog(QDialog):
             title=self._title_input.text(),
             due_date=self._due_date_input.date().toPython(),
             notes=self._notes_input.toPlainText().strip() or None,
+            order_id=self._order_id,
         )
 
         try:

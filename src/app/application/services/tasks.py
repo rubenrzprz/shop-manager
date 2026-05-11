@@ -3,7 +3,7 @@ from math import ceil
 from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.application.dto.tasks import (
     CreateTaskInput,
@@ -12,8 +12,15 @@ from app.application.dto.tasks import (
     TaskListItem,
 )
 from app.application.services.settings import ApplicationSettingsService
-from app.domain.enums import TaskRecurrenceType
-from app.infrastructure.db.models import Task, TaskSeries
+from app.domain.enums import OrderStatus, TaskRecurrenceType
+from app.infrastructure.db.models import Order, Task, TaskSeries
+
+ACTIVE_ORDER_FOLLOW_UP_STATUSES = {
+    OrderStatus.DRAFT,
+    OrderStatus.CONFIRMED,
+    OrderStatus.IN_PROGRESS,
+    OrderStatus.READY,
+}
 
 
 class CreateTaskService:
@@ -22,8 +29,11 @@ class CreateTaskService:
 
     def execute(self, data: CreateTaskInput) -> Task:
         self._validate_task_input(data)
+        if data.order_id is not None and self._session.get(Order, data.order_id) is None:
+            raise ValueError("Order not found.")
 
         task = Task(
+            order_id=data.order_id,
             title=data.title.strip(),
             notes=data.notes,
             due_date=data.due_date,
@@ -156,18 +166,21 @@ class ListDashboardTasksService:
 
         overdue = self._session.scalars(
             select(Task)
+            .options(joinedload(Task.order))
             .where(Task.completed_at.is_(None))
             .where(Task.due_date < selected_day)
             .order_by(Task.due_date, Task.id)
         ).all()
         pending_today = self._session.scalars(
             select(Task)
+            .options(joinedload(Task.order))
             .where(Task.completed_at.is_(None))
             .where(Task.due_date == selected_day)
             .order_by(Task.id)
         ).all()
         completed_today = self._session.scalars(
             select(Task)
+            .options(joinedload(Task.order))
             .where(Task.completed_at >= completed_start_utc)
             .where(Task.completed_at < completed_end_utc)
             .order_by(Task.completed_at.desc(), Task.id.desc())
@@ -187,6 +200,9 @@ class ListDashboardTasksService:
             notes=task.notes,
             due_date=task.due_date,
             completed_at=task.completed_at,
+            order_id=task.order_id,
+            order_number=task.order.order_number if task.order is not None else None,
+            is_auto_order_follow_up=task.is_auto_order_follow_up,
         )
 
 
@@ -194,14 +210,16 @@ class CompleteTaskService:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def execute(self, task_id: int) -> Task:
-        task = self._session.get(Task, task_id)
+    def execute(self, task_id: int, completed_at: datetime | None = None) -> Task:
+        task = self._session.get(Task, task_id, options=[joinedload(Task.order)])
         if task is None:
             raise ValueError("Task not found.")
 
         if task.completed_at is None:
-            task.completed_at = datetime.now(timezone.utc)
+            task.completed_at = completed_at or datetime.now(timezone.utc)
             self._session.flush()
+            if task.is_auto_order_follow_up:
+                GenerateOrderFollowUpTasksService(self._session).schedule_next_for_task(task)
 
         return task
 
@@ -211,14 +229,141 @@ class ReopenTaskService:
         self._session = session
 
     def execute(self, task_id: int) -> Task:
-        task = self._session.get(Task, task_id)
+        task = self._session.get(Task, task_id, options=[joinedload(Task.order)])
         if task is None:
             raise ValueError("Task not found.")
 
+        if task.completed_at is not None and task.is_auto_order_follow_up:
+            if (
+                task.order is not None
+                and task.order.status not in ACTIVE_ORDER_FOLLOW_UP_STATUSES
+            ):
+                raise ValueError("Automatic follow-ups cannot be reopened for inactive orders.")
+            GenerateOrderFollowUpTasksService(self._session).delete_open_successor_for_task(task)
         task.completed_at = None
         self._session.flush()
 
         return task
+
+
+class GenerateOrderFollowUpTasksService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(self, today: date | None = None) -> int:
+        selected_day = today or date.today()
+        orders = self._session.scalars(
+            select(Order)
+            .where(Order.status.in_(ACTIVE_ORDER_FOLLOW_UP_STATUSES))
+            .order_by(Order.id)
+        ).all()
+        created_count = 0
+
+        for order in orders:
+            if self.ensure_open_follow_up_for_order(order, selected_day) is not None:
+                created_count += 1
+
+        self._session.flush()
+        return created_count
+
+    def ensure_open_follow_up_for_order(
+        self,
+        order: Order,
+        today: date | None = None,
+    ) -> Task | None:
+        if order.status not in ACTIVE_ORDER_FOLLOW_UP_STATUSES:
+            return None
+        if self._has_open_follow_up(order.id):
+            return None
+
+        follow_up = self._new_follow_up_task(order, today or date.today())
+        self._session.add(follow_up)
+        self._session.flush()
+        return follow_up
+
+    def delete_open_follow_ups_for_order(self, order_id: int) -> None:
+        open_follow_ups = self._session.scalars(
+            select(Task)
+            .where(Task.order_id == order_id)
+            .where(Task.is_auto_order_follow_up.is_(True))
+            .where(Task.completed_at.is_(None))
+        ).all()
+        for follow_up in open_follow_ups:
+            self._session.delete(follow_up)
+        self._session.flush()
+
+    def schedule_next_for_task(self, task: Task) -> Task | None:
+        if task.order_id is None:
+            return None
+
+        order = task.order or self._session.get(Order, task.order_id)
+        if order is None or order.status not in ACTIVE_ORDER_FOLLOW_UP_STATUSES:
+            return None
+        if self._has_open_follow_up(order.id):
+            return None
+
+        follow_up_days = ApplicationSettingsService(
+            self._session
+        ).default_order_follow_up_days()
+        completed_day = (task.completed_at or datetime.now(timezone.utc)).date()
+        next_task = self._new_follow_up_task(
+            order,
+            completed_day,
+            due_date=completed_day + timedelta(days=follow_up_days),
+        )
+        self._session.add(next_task)
+        self._session.flush()
+        return next_task
+
+    def delete_open_successor_for_task(self, task: Task) -> None:
+        if task.order_id is None:
+            return
+
+        successor = self._session.scalar(
+            select(Task)
+            .where(Task.order_id == task.order_id)
+            .where(Task.id != task.id)
+            .where(Task.is_auto_order_follow_up.is_(True))
+            .where(Task.completed_at.is_(None))
+            .order_by(Task.due_date, Task.id)
+            .limit(1)
+        )
+        if successor is not None:
+            self._session.delete(successor)
+
+    def _has_open_follow_up(self, order_id: int) -> bool:
+        return (
+            self._session.scalar(
+                select(Task.id)
+                .where(Task.order_id == order_id)
+                .where(Task.is_auto_order_follow_up.is_(True))
+                .where(Task.completed_at.is_(None))
+                .limit(1)
+            )
+            is not None
+        )
+
+    def _new_follow_up_task(
+        self,
+        order: Order,
+        today: date,
+        *,
+        due_date: date | None = None,
+    ) -> Task:
+        follow_up_days = ApplicationSettingsService(
+            self._session
+        ).default_order_follow_up_days()
+        calculated_due_date = due_date or max(
+            today,
+            order.order_date + timedelta(days=follow_up_days),
+        )
+        return Task(
+            order_id=order.id,
+            is_auto_order_follow_up=True,
+            title=f"Follow up {order.order_number}",
+            notes="Automatic active-order follow-up reminder.",
+            due_date=calculated_due_date,
+        )
 
 
 def _iter_occurrence_dates(

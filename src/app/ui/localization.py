@@ -41,6 +41,8 @@ _TRANSLATIONS = {
         "No completed tasks for today.": "No hay tareas completadas para hoy.",
         "New Task": "Nueva tarea",
         "Create Task": "Crear tarea",
+        "Create Order Reminder": "Crear recordatorio de pedido",
+        "Follow up": "Seguimiento",
         "Title": "Título",
         "Due date": "Fecha de vencimiento",
         "Complete": "Completar",
@@ -50,6 +52,9 @@ _TRANSLATIONS = {
         "Could not update task": "No se pudo actualizar la tarea",
         "Task title is required.": "El título de la tarea es obligatorio.",
         "Task not found.": "No se encontró la tarea.",
+        "Automatic active-order follow-up reminder.": (
+            "Recordatorio automático de seguimiento de pedido activo."
+        ),
         "Task series title is required.": "El título de la serie de tareas es obligatorio.",
         "Task recurrence interval must be at least 1.": (
             "El intervalo de repetición de la tarea debe ser al menos 1."
@@ -108,6 +113,7 @@ _TRANSLATIONS = {
         "Company": "Empresa",
         "Company name": "Nombre de la empresa",
         "Order #": "Pedido #",
+        "Order": "Pedido",
         "Customer": "Cliente",
         "Order Date": "Fecha del pedido",
         "Order date": "Fecha del pedido",
@@ -125,6 +131,8 @@ _TRANSLATIONS = {
         "Address line 2": "Dirección 2",
         "Postal code": "Código postal",
         "Notes": "Notas",
+        "New Reminder": "Nuevo recordatorio",
+        "Select an order.": "Selecciona un pedido.",
         "Product": "Producto",
         "Variant": "Variante",
         "Variants": "Variantes",
@@ -331,11 +339,20 @@ _TRANSLATIONS = {
         "Spanish": "Español",
         "Strict order workflow": "Flujo estricto de pedidos",
         "Task generation horizon": "Horizonte de generación de tareas",
+        "Default order follow-up": "Seguimiento predeterminado de pedidos",
         "days": "días",
         "Recurring task occurrences are generated this many days ahead.": (
             "Las ocurrencias de tareas recurrentes se generan con esta cantidad de días "
             "de antelación."
         ),
+        "Automatic active-order follow-up reminders repeat after this many days.": (
+            "Los recordatorios automáticos de seguimiento de pedidos activos se repiten "
+            "después de esta cantidad de días."
+        ),
+        "Default order follow-up days must be between 1 and 365.": (
+            "Los días de seguimiento predeterminado de pedidos deben estar entre 1 y 365."
+        ),
+        "Order not found.": "No se encontró el pedido.",
         "Enabled order statuses": "Estados de pedido habilitados",
         "Choose which statuses are used when advancing or reverting orders. Draft, completed, and cancelled are always required.": (
             "Elige qué estados se usan al avanzar o revertir pedidos. Borrador, completado "

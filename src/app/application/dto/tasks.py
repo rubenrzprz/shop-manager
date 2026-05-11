@@ -9,6 +9,7 @@ class CreateTaskInput:
     title: str
     due_date: date
     notes: str | None = None
+    order_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,9 @@ class TaskListItem:
     notes: str | None
     due_date: date
     completed_at: datetime | None
+    order_id: int | None = None
+    order_number: str | None = None
+    is_auto_order_follow_up: bool = False
 
 
 @dataclass(frozen=True)

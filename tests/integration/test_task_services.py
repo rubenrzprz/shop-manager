@@ -1,22 +1,77 @@
 import os
 import time as time_module
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
 
+from app.application.dto.customers import CreateCustomerInput
+from app.application.dto.orders import CreateOrderInput, CreateOrderLineInput
+from app.application.dto.products import CreateProductInput, CreateProductVariantInput
 from app.application.dto.tasks import CreateTaskInput, CreateTaskSeriesInput
+from app.application.services.customers import CreateCustomerService
+from app.application.services.orders import CreateOrderService
+from app.application.services.orders import UpdateOrderStatusService
+from app.application.services.products import CreateProductService
 from app.application.services.settings import ApplicationSettingsService
 from app.application.services.tasks import (
     CompleteTaskService,
     CreateTaskService,
     CreateTaskSeriesService,
+    GenerateOrderFollowUpTasksService,
     GenerateRecurringTasksService,
     ListDashboardTasksService,
     ReopenTaskService,
 )
-from app.domain.enums import TaskRecurrenceType
+from app.domain.enums import CustomerType, OrderStatus, TaskRecurrenceType
 from app.infrastructure.db.models import Task
+
+
+def create_customer(db_session):
+    return CreateCustomerService(db_session).execute(
+        CreateCustomerInput(
+            customer_type=CustomerType.INDIVIDUAL,
+            name="Maria Rodriguez",
+            phone="+34 600000000",
+        )
+    )
+
+
+def create_product_variant(db_session):
+    product = CreateProductService(db_session).execute(
+        CreateProductInput(
+            name="Traditional Shirt",
+            base_price=Decimal("49.90"),
+            variants=[
+                CreateProductVariantInput(
+                    variant_name="Default",
+                )
+            ],
+        )
+    )
+    return product.variants[0]
+
+
+def create_order(db_session, *, status: OrderStatus = OrderStatus.DRAFT, order_date=None):
+    customer = create_customer(db_session)
+    variant = create_product_variant(db_session)
+    order = CreateOrderService(db_session).execute(
+        CreateOrderInput(
+            customer_id=customer.id,
+            order_date=order_date or date(2026, 5, 1),
+            lines=[
+                CreateOrderLineInput(
+                    product_variant_id=variant.id,
+                    quantity=1,
+                )
+            ],
+        )
+    )
+    db_session.query(Task).filter(Task.order_id == order.id).delete()
+    order.status = status
+    db_session.flush()
+    return order
 
 
 def test_create_task_service_creates_one_off_task(db_session):
@@ -33,6 +88,35 @@ def test_create_task_service_creates_one_off_task(db_session):
     assert task.notes == "Ask about delivery"
     assert task.due_date == date(2026, 5, 5)
     assert task.completed_at is None
+
+
+def test_create_task_service_links_custom_task_to_order(db_session):
+    order = create_order(db_session)
+
+    task = CreateTaskService(db_session).execute(
+        CreateTaskInput(
+            title="Ask customer for measurements",
+            due_date=date(2026, 5, 8),
+            order_id=order.id,
+        )
+    )
+
+    task_list = ListDashboardTasksService(db_session).execute(date(2026, 5, 8))
+
+    assert task.order_id == order.id
+    assert task_list.pending_today[0].order_id == order.id
+    assert task_list.pending_today[0].order_number == order.order_number
+
+
+def test_create_task_service_rejects_missing_order_link(db_session):
+    with pytest.raises(ValueError, match="Order not found."):
+        CreateTaskService(db_session).execute(
+            CreateTaskInput(
+                title="Ask customer for measurements",
+                due_date=date(2026, 5, 8),
+                order_id=999,
+            )
+        )
 
 
 def test_create_task_service_rejects_blank_title(db_session):
@@ -202,6 +286,153 @@ def test_generate_recurring_tasks_service_preserves_monthly_anchor_after_short_m
         date(2026, 3, 31),
         date(2026, 4, 30),
     ]
+
+
+def test_generate_order_follow_up_tasks_service_creates_one_open_task_per_active_order(
+    db_session,
+):
+    ApplicationSettingsService(db_session).set_default_order_follow_up_days(7)
+    active_order = create_order(db_session, order_date=date(2026, 5, 1))
+    completed_order = create_order(
+        db_session,
+        status=OrderStatus.COMPLETED,
+        order_date=date(2026, 5, 1),
+    )
+
+    service = GenerateOrderFollowUpTasksService(db_session)
+
+    assert service.execute(date(2026, 5, 5)) == 1
+    assert service.execute(date(2026, 5, 5)) == 0
+
+    tasks = db_session.scalars(
+        select(Task).where(Task.is_auto_order_follow_up.is_(True)).order_by(Task.id)
+    ).all()
+    assert len(tasks) == 1
+    assert tasks[0].order_id == active_order.id
+    assert tasks[0].due_date == date(2026, 5, 8)
+    assert tasks[0].title == f"Follow up {active_order.order_number}"
+    assert completed_order.id not in [task.order_id for task in tasks]
+
+
+def test_generate_order_follow_up_tasks_service_uses_today_for_overdue_initial_follow_up(
+    db_session,
+):
+    create_order(db_session, order_date=date(2026, 4, 1))
+
+    GenerateOrderFollowUpTasksService(db_session).execute(date(2026, 5, 5))
+
+    task = db_session.scalar(select(Task).where(Task.is_auto_order_follow_up.is_(True)))
+    assert task.due_date == date(2026, 5, 5)
+
+
+def test_complete_auto_order_follow_up_schedules_next_when_order_remains_active(
+    db_session,
+):
+    ApplicationSettingsService(db_session).set_default_order_follow_up_days(10)
+    order = create_order(db_session, order_date=date(2026, 5, 1))
+    GenerateOrderFollowUpTasksService(db_session).execute(date(2026, 5, 5))
+    task = db_session.scalar(select(Task).where(Task.order_id == order.id))
+
+    CompleteTaskService(db_session).execute(
+        task.id,
+        completed_at=datetime(2026, 5, 9, 12, 0, tzinfo=timezone.utc),
+    )
+
+    tasks = db_session.scalars(
+        select(Task).where(Task.order_id == order.id).order_by(Task.due_date)
+    ).all()
+    assert len(tasks) == 2
+    assert tasks[0].completed_at is not None
+    assert tasks[1].completed_at is None
+    assert tasks[1].due_date == date(2026, 5, 19)
+
+
+def test_reopen_auto_order_follow_up_removes_open_successor(db_session):
+    ApplicationSettingsService(db_session).set_default_order_follow_up_days(10)
+    order = create_order(db_session, order_date=date(2026, 5, 1))
+    GenerateOrderFollowUpTasksService(db_session).execute(date(2026, 5, 5))
+    task = db_session.scalar(select(Task).where(Task.order_id == order.id))
+    CompleteTaskService(db_session).execute(
+        task.id,
+        completed_at=datetime(2026, 5, 9, 12, 0, tzinfo=timezone.utc),
+    )
+
+    ReopenTaskService(db_session).execute(task.id)
+
+    tasks = db_session.scalars(
+        select(Task).where(Task.order_id == order.id).order_by(Task.due_date)
+    ).all()
+    assert len(tasks) == 1
+    assert tasks[0].id == task.id
+    assert tasks[0].completed_at is None
+
+
+def test_reopen_auto_order_follow_up_removes_successor_after_early_completion(
+    db_session,
+):
+    ApplicationSettingsService(db_session).set_default_order_follow_up_days(7)
+    order = create_order(db_session, order_date=date(2026, 5, 13))
+    GenerateOrderFollowUpTasksService(db_session).execute(date(2026, 5, 13))
+    task = db_session.scalar(select(Task).where(Task.order_id == order.id))
+    assert task.due_date == date(2026, 5, 20)
+    CompleteTaskService(db_session).execute(
+        task.id,
+        completed_at=datetime(2026, 5, 10, 12, 0, tzinfo=timezone.utc),
+    )
+
+    ReopenTaskService(db_session).execute(task.id)
+
+    tasks = db_session.scalars(
+        select(Task).where(Task.order_id == order.id).order_by(Task.due_date)
+    ).all()
+    assert len(tasks) == 1
+    assert tasks[0].id == task.id
+    assert tasks[0].completed_at is None
+
+
+def test_complete_auto_order_follow_up_stops_when_order_is_completed(db_session):
+    order = create_order(db_session, order_date=date(2026, 5, 1))
+    GenerateOrderFollowUpTasksService(db_session).execute(date(2026, 5, 5))
+    task = db_session.scalar(select(Task).where(Task.order_id == order.id))
+    order.status = OrderStatus.COMPLETED
+    db_session.flush()
+
+    CompleteTaskService(db_session).execute(
+        task.id,
+        completed_at=datetime(2026, 5, 9, 12, 0, tzinfo=timezone.utc),
+    )
+
+    tasks = db_session.scalars(select(Task).where(Task.order_id == order.id)).all()
+    assert len(tasks) == 1
+
+
+def test_reopen_auto_order_follow_up_rejects_inactive_order(db_session):
+    order = create_order(db_session, order_date=date(2026, 5, 1))
+    GenerateOrderFollowUpTasksService(db_session).execute(date(2026, 5, 5))
+    task = db_session.scalar(select(Task).where(Task.order_id == order.id))
+    CompleteTaskService(db_session).execute(
+        task.id,
+        completed_at=datetime(2026, 5, 9, 12, 0, tzinfo=timezone.utc),
+    )
+    order.status = OrderStatus.READY
+    db_session.flush()
+    UpdateOrderStatusService(db_session).execute(order.id, OrderStatus.COMPLETED)
+
+    with pytest.raises(
+        ValueError,
+        match="Automatic follow-ups cannot be reopened for inactive orders.",
+    ):
+        ReopenTaskService(db_session).execute(task.id)
+
+    db_session.refresh(task)
+    open_auto_follow_ups = db_session.scalars(
+        select(Task)
+        .where(Task.order_id == order.id)
+        .where(Task.is_auto_order_follow_up.is_(True))
+        .where(Task.completed_at.is_(None))
+    ).all()
+    assert task.completed_at is not None
+    assert open_auto_follow_ups == []
 
 
 def test_dashboard_tasks_service_groups_overdue_pending_and_completed_today(db_session):

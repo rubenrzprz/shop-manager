@@ -17,6 +17,10 @@ from app.application.dto.orders import (
     UpdateOrderInput,
 )
 from app.application.services.settings import ApplicationSettingsService
+from app.application.services.tasks import (
+    ACTIVE_ORDER_FOLLOW_UP_STATUSES,
+    GenerateOrderFollowUpTasksService,
+)
 from app.domain.enums import DiscountType, OrderStatus
 from app.infrastructure.db.models.customers import Customer
 from app.infrastructure.db.models.orders import Order, OrderLine
@@ -125,6 +129,7 @@ class CreateOrderService:
 
         self._session.flush()
         order.lines = order_lines
+        GenerateOrderFollowUpTasksService(self._session).ensure_open_follow_up_for_order(order)
 
         return order
 
@@ -679,6 +684,12 @@ class UpdateOrderStatusService:
             order.completed_at = None
 
         self._session.flush()
+        if target_status in ACTIVE_ORDER_FOLLOW_UP_STATUSES:
+            GenerateOrderFollowUpTasksService(self._session).ensure_open_follow_up_for_order(order)
+        elif target_status in {OrderStatus.COMPLETED, OrderStatus.CANCELLED}:
+            GenerateOrderFollowUpTasksService(self._session).delete_open_follow_ups_for_order(
+                order.id
+            )
 
         return order
 

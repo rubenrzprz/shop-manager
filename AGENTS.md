@@ -158,7 +158,9 @@ The project currently has these completed vertical slices:
   - quick action buttons open create product/supplier/customer/order flows and settings
   - daily task sections show overdue, pending today, and completed today tasks
   - create standalone one-off tasks
+  - create custom order-linked reminder tasks
   - generate recurring task occurrences from active task series
+  - generate automatic active-order follow-up reminders
   - mark tasks complete and reopen completed tasks
 - Product Management v1
   - create products
@@ -268,11 +270,14 @@ The project currently has these completed vertical slices:
 - Dashboard v1 should include shortcuts to core areas and a daily task/reminder section.
 - Persist tasks/reminders as application concepts; "daily events" are the dashboard/calendar view
   of tasks due on a selected day.
-- Tasks should support standalone reminders, custom order-linked reminders, and recurring reminders.
+- Tasks support standalone reminders, custom order-linked reminders, recurring reminders, and
+  automatic active-order follow-up reminders.
 - Daily task sections should show overdue tasks, pending tasks for the selected day, and completed
   tasks for that same day.
 - Standalone one-off `Task` rows are implemented with title, notes, due date, and completed
   timestamp.
+- Custom order-linked `Task` rows use optional `order_id`; the order page can create a reminder
+  for the selected order, and dashboard task labels show the order number when present.
 - Recurring tasks use `TaskSeries` plus generated `Task` occurrences:
   - `TaskSeries`: title, notes, recurrence type/interval, starts on, optional ends on, active flag
   - `Task`: optional series, title/notes snapshot, due date, completed timestamp
@@ -283,35 +288,45 @@ The project currently has these completed vertical slices:
   today through `today + task_generation_horizon_days`.
 - Generated recurring tasks should be unique per `task_series_id` and `due_date`.
 - Recurring series currently support daily, weekly, and monthly intervals.
-- Creating/editing recurring series from the UI is deferred; current support is persistence and
-  generation services.
-- Order-linked task fields are still deferred to the order-bound reminder slice.
-- Planned order follow-up setting: `default_order_follow_up_days`, likely default `7`.
-- Automatic order follow-up reminders should apply to active orders and stop when orders are
-  completed or cancelled.
+- Creating recurring series from the UI is deferred to the manual recurring reminders slice;
+  current support is persistence and generation services only.
+- Editing existing recurring series is deferred beyond manual recurring reminder creation.
+- `default_order_follow_up_days` is implemented as a typed setting, default `7`, allowed range
+  `1` to `365`, and exposed in the settings UI.
+- Automatic order follow-up reminders are generated for active orders without an open automatic
+  follow-up on startup, when draft orders are created, and when orders transition back into an
+  active status. Completing one schedules the next follow-up when the order remains active;
+  completed and cancelled orders stop producing automatic follow-ups and clear open automatic
+  follow-ups while preserving custom order-linked reminders. Completed automatic follow-ups cannot
+  be reopened once their order is completed or cancelled.
 - See `docs/dashboard_tasks_roadmap.md` for the detailed implementation roadmap.
 
 ## Likely Next Steps
 
 When asked to propose the next logical step, consider this order:
 
-1. Order-bound reminders
-   - add custom order-linked tasks
-   - add automatic order follow-up reminders with `default_order_follow_up_days`
-2. Calendar task view
+1. Calendar task view
    - browse tasks by date
    - create reminders directly on selected dates
-3. Product category grouping polish
+2. Manual recurring reminders
+   - create `TaskSeries` from the UI for standalone recurring reminders
+   - choose daily/weekly/monthly recurrence, interval, start date, and optional end date
+   - generate occurrences after save through the configured horizon
+   - defer editing existing series unless explicitly requested
+3. Dashboard/UI polish
+   - improve dashboard task layout and reminder ergonomics
+   - keep order-linked reminder creation contextual to the selected order
+4. Product category grouping polish
    - consider grouping the products page by category if filtering is not enough
    - consider category filters in product/variant pickers when order creation needs it
-4. Localization polish
+5. Localization polish
    - translate any newly added UI strings through the existing helper
    - consider service-layer message codes if application validation errors need full localization
    - consider broader formatting localization for currency/date display
-5. Stock movements
+6. Stock movements
    - reduce stock when an order reaches the appropriate status
    - do not mix stock behavior into basic order create/list
-6. Shipment workflows
+7. Shipment workflows
    - create/update shipment info for orders
 
 Prefer one small vertical slice per branch.
