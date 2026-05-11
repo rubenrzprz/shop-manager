@@ -170,10 +170,15 @@ class DashboardPage(QWidget):
 
     @staticmethod
     def _task_label(task: TaskListItem) -> str:
+        order_prefix = f"[{task.order_number}] " if task.order_number else ""
+        if task.is_auto_order_follow_up and task.order_number:
+            title = f"{order_prefix}{t('Follow up')}"
+        else:
+            title = f"{order_prefix}{task.title}"
         if task.notes:
-            return f"{task.due_date.isoformat()} - {task.title} ({task.notes})"
+            return f"{task.due_date.isoformat()} - {title} ({t(task.notes)})"
 
-        return f"{task.due_date.isoformat()} - {task.title}"
+        return f"{task.due_date.isoformat()} - {title}"
 
     def _open_task_dialog(self) -> None:
         dialog = TaskDialog(self, default_due_date=date.today())

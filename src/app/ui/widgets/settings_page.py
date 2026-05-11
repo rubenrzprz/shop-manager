@@ -13,7 +13,9 @@ from PySide6.QtWidgets import (
 )
 
 from app.application.services.settings import (
+    MAX_DEFAULT_ORDER_FOLLOW_UP_DAYS,
     MAX_TASK_GENERATION_HORIZON_DAYS,
+    MIN_DEFAULT_ORDER_FOLLOW_UP_DAYS,
     MIN_TASK_GENERATION_HORIZON_DAYS,
     ApplicationSettingsService,
 )
@@ -46,6 +48,14 @@ class SettingsPage(QWidget):
         self._task_generation_horizon_input.setSuffix(" days")
         self._task_generation_horizon_description = QLabel()
         self._task_generation_horizon_description.setWordWrap(True)
+        self._default_order_follow_up_label = QLabel()
+        self._default_order_follow_up_input = QSpinBox()
+        self._default_order_follow_up_input.setRange(
+            MIN_DEFAULT_ORDER_FOLLOW_UP_DAYS,
+            MAX_DEFAULT_ORDER_FOLLOW_UP_DAYS,
+        )
+        self._default_order_follow_up_description = QLabel()
+        self._default_order_follow_up_description.setWordWrap(True)
         self._strict_order_workflow_checkbox = QCheckBox()
         self._strict_order_workflow_description = QLabel()
         self._strict_order_workflow_description.setWordWrap(True)
@@ -81,11 +91,16 @@ class SettingsPage(QWidget):
             self._task_generation_horizon_label,
             self._task_generation_horizon_input,
         )
+        self._form.addRow(
+            self._default_order_follow_up_label,
+            self._default_order_follow_up_input,
+        )
 
         layout = QVBoxLayout()
         layout.addWidget(self._title_label)
         layout.addLayout(self._form)
         layout.addWidget(self._task_generation_horizon_description)
+        layout.addWidget(self._default_order_follow_up_description)
         layout.addWidget(self._strict_order_workflow_checkbox)
         layout.addWidget(self._strict_order_workflow_description)
         layout.addWidget(self._order_status_group)
@@ -103,6 +118,11 @@ class SettingsPage(QWidget):
         self._task_generation_horizon_input.setSuffix(f" {t('days')}")
         self._task_generation_horizon_description.setText(
             t("Recurring task occurrences are generated this many days ahead.")
+        )
+        self._default_order_follow_up_label.setText(t("Default order follow-up"))
+        self._default_order_follow_up_input.setSuffix(f" {t('days')}")
+        self._default_order_follow_up_description.setText(
+            t("Automatic active-order follow-up reminders repeat after this many days.")
         )
         for index in range(self._language_input.count()):
             language_code = self._language_input.itemData(index)
@@ -140,6 +160,7 @@ class SettingsPage(QWidget):
                 self._language_input.setCurrentIndex(language_index)
             self._strict_order_workflow_checkbox.setChecked(settings.strict_order_workflow_enabled)
             self._task_generation_horizon_input.setValue(settings.task_generation_horizon_days)
+            self._default_order_follow_up_input.setValue(settings.default_order_follow_up_days)
             for status, checkbox in self._order_status_checkboxes.items():
                 checkbox.setChecked(status in settings.enabled_order_statuses)
         except Exception as exc:
@@ -171,6 +192,7 @@ class SettingsPage(QWidget):
                 self._strict_order_workflow_checkbox.isChecked()
             )
             service.set_task_generation_horizon_days(self._task_generation_horizon_input.value())
+            service.set_default_order_follow_up_days(self._default_order_follow_up_input.value())
             service.set_enabled_order_statuses(enabled_order_statuses)
             session.commit()
             set_language(selected_language)

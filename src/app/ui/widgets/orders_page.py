@@ -22,6 +22,7 @@ from app.domain.enums import OrderStatus
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialog_helpers import question
 from app.ui.dialogs.order_dialog import OrderDialog
+from app.ui.dialogs.task_dialog import TaskDialog
 from app.ui.localization import order_status_label, t
 
 
@@ -51,6 +52,9 @@ class OrdersPage(QWidget):
 
         self._recover_order_button = QPushButton()
         self._recover_order_button.clicked.connect(self.recover_selected_order)
+
+        self._reminder_button = QPushButton()
+        self._reminder_button.clicked.connect(self.open_reminder_dialog)
 
         self._refresh_button = QPushButton()
         self._refresh_button.clicked.connect(self.load_orders)
@@ -82,6 +86,7 @@ class OrdersPage(QWidget):
         actions_layout.addWidget(self._revert_status_button)
         actions_layout.addWidget(self._cancel_order_button)
         actions_layout.addWidget(self._recover_order_button)
+        actions_layout.addWidget(self._reminder_button)
         actions_layout.addWidget(self._refresh_button)
         actions_layout.addStretch()
 
@@ -99,6 +104,7 @@ class OrdersPage(QWidget):
         self._revert_status_button.setText(t("Revert Status"))
         self._cancel_order_button.setText(t("Cancel Order"))
         self._recover_order_button.setText(t("Recover Order"))
+        self._reminder_button.setText(t("New Reminder"))
         self._refresh_button.setText(t("Refresh"))
         self._table.setHorizontalHeaderLabels(
             [
@@ -150,6 +156,19 @@ class OrdersPage(QWidget):
         dialog = OrderDialog(self, order_id=order.id)
         if dialog.exec():
             self.load_orders()
+
+    def open_reminder_dialog(self) -> None:
+        order = self._selected_order()
+        if order is None:
+            QMessageBox.information(self, t("No order selected"), t("Select an order."))
+            return
+
+        dialog = TaskDialog(
+            self,
+            default_order_id=order.id,
+            default_order_label=f"{order.order_number} - {order.customer_name}",
+        )
+        dialog.exec()
 
     def advance_selected_order_status(self) -> None:
         order = self._selected_order()
