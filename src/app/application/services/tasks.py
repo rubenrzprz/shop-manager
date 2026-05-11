@@ -309,7 +309,6 @@ class GenerateOrderFollowUpTasksService:
             .where(Task.id != task.id)
             .where(Task.is_auto_order_follow_up.is_(True))
             .where(Task.completed_at.is_(None))
-            .where(Task.due_date >= task.due_date)
             .order_by(Task.due_date, Task.id)
             .limit(1)
         )
