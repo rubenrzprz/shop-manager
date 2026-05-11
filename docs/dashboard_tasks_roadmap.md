@@ -105,6 +105,9 @@ Implemented setting:
 Implemented behavior:
 
 - Active orders can receive periodic "check order status" reminders.
+- New draft orders receive an initial automatic follow-up during order creation.
+- Orders recovered or transitioned back into active statuses receive an open follow-up when one is
+  missing.
 - Completing an automatic order follow-up schedules the next one if the order remains active.
 - Completed and cancelled orders should stop producing automatic follow-up reminders.
 - Custom order reminders should remain independent from default follow-up reminders.

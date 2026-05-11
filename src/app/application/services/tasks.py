@@ -255,14 +255,26 @@ class GenerateOrderFollowUpTasksService:
         created_count = 0
 
         for order in orders:
-            if self._has_open_follow_up(order.id):
-                continue
-
-            self._session.add(self._new_follow_up_task(order, selected_day))
-            created_count += 1
+            if self.ensure_open_follow_up_for_order(order, selected_day) is not None:
+                created_count += 1
 
         self._session.flush()
         return created_count
+
+    def ensure_open_follow_up_for_order(
+        self,
+        order: Order,
+        today: date | None = None,
+    ) -> Task | None:
+        if order.status not in ACTIVE_ORDER_FOLLOW_UP_STATUSES:
+            return None
+        if self._has_open_follow_up(order.id):
+            return None
+
+        follow_up = self._new_follow_up_task(order, today or date.today())
+        self._session.add(follow_up)
+        self._session.flush()
+        return follow_up
 
     def schedule_next_for_task(self, task: Task) -> Task | None:
         if task.order_id is None:

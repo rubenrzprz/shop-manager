@@ -67,6 +67,7 @@ def create_order(db_session, *, status: OrderStatus = OrderStatus.DRAFT, order_d
             ],
         )
     )
+    db_session.query(Task).filter(Task.order_id == order.id).delete()
     order.status = status
     db_session.flush()
     return order

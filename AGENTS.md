@@ -294,8 +294,9 @@ The project currently has these completed vertical slices:
 - `default_order_follow_up_days` is implemented as a typed setting, default `7`, allowed range
   `1` to `365`, and exposed in the settings UI.
 - Automatic order follow-up reminders are generated for active orders without an open automatic
-  follow-up. Completing one schedules the next follow-up when the order remains active; completed
-  and cancelled orders stop producing automatic follow-ups.
+  follow-up on startup, when draft orders are created, and when orders transition back into an
+  active status. Completing one schedules the next follow-up when the order remains active;
+  completed and cancelled orders stop producing automatic follow-ups.
 - See `docs/dashboard_tasks_roadmap.md` for the detailed implementation roadmap.
 
 ## Likely Next Steps
