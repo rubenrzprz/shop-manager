@@ -28,6 +28,7 @@ from app.ui.localization import SUPPORTED_LANGUAGES, order_status_label, set_lan
 
 class SettingsPage(QWidget):
     language_changed = Signal(str)
+    task_changed = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -239,6 +240,7 @@ class SettingsPage(QWidget):
                 session
             ).recalculate_open_follow_ups()
             session.commit()
+            self.task_changed.emit()
             QMessageBox.information(
                 self,
                 t("Order follow-ups recalculated"),

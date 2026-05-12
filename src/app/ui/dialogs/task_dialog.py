@@ -98,12 +98,12 @@ class TaskDialog(QDialog):
         self._recurrence_type_input.addItem(t("months"), TaskRecurrenceType.MONTHLY)
         self._monthly_rule_input = QComboBox()
         self._monthly_rule_input.addItem(
-            t("First day of month"),
-            TaskMonthlyRecurrenceRule.FIRST_DAY_OF_MONTH,
-        )
-        self._monthly_rule_input.addItem(
             t("Same day as start date"),
             TaskMonthlyRecurrenceRule.DAY_OF_MONTH,
+        )
+        self._monthly_rule_input.addItem(
+            t("First day of month"),
+            TaskMonthlyRecurrenceRule.FIRST_DAY_OF_MONTH,
         )
         self._monthly_rule_input.addItem(
             t("Specific day of month"),

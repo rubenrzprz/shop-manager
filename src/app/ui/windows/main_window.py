@@ -38,6 +38,8 @@ class MainWindow(QMainWindow):
         self._orders_page.order_changed.connect(self._dashboard_page.reload_dashboard)
         self._orders_page.task_changed.connect(self._dashboard_page.load_tasks)
         self._orders_page.task_changed.connect(self._calendar_page.load_calendar)
+        self._settings_page.task_changed.connect(self._dashboard_page.load_tasks)
+        self._settings_page.task_changed.connect(self._calendar_page.load_calendar)
 
         self._tabs.addTab(self._dashboard_page, "")
         self._tabs.addTab(self._calendar_page, "")
