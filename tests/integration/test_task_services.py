@@ -19,6 +19,7 @@ from app.application.services.tasks import (
     CompleteTaskService,
     CreateTaskService,
     CreateTaskSeriesService,
+    DeleteTaskService,
     GenerateOrderFollowUpTasksService,
     GenerateRecurringTasksService,
     GetTaskForEditService,
@@ -27,7 +28,13 @@ from app.application.services.tasks import (
     ReopenTaskService,
     UpdateTaskService,
 )
-from app.domain.enums import CustomerType, OrderStatus, TaskRecurrenceType
+from app.domain.enums import (
+    CustomerType,
+    OrderStatus,
+    TaskMonthlyRecurrenceRule,
+    TaskRecurrenceType,
+    TaskSeriesUpdateScope,
+)
 from app.infrastructure.db.models import Task
 
 
@@ -131,19 +138,31 @@ def test_create_task_service_rejects_blank_title(db_session):
 
 def test_update_task_service_updates_editable_task_fields(db_session):
     task = CreateTaskService(db_session).execute(
-        CreateTaskInput(title="Original", due_date=date(2026, 5, 11), notes="Old")
+        CreateTaskInput(
+            title="Original",
+            due_date=date(2026, 5, 11),
+            notes="Old",
+            color_hex="#16a34a",
+        )
     )
 
     updated = UpdateTaskService(db_session).execute(
         task.id,
-        UpdateTaskInput(title="Updated", due_date=date(2026, 5, 12), notes="New"),
+        UpdateTaskInput(
+            title="Updated",
+            due_date=date(2026, 5, 12),
+            notes="New",
+            color_hex="#dc2626",
+        ),
     )
     edit_item = GetTaskForEditService(db_session).execute(task.id)
 
     assert updated.title == "Updated"
     assert updated.due_date == date(2026, 5, 12)
     assert updated.notes == "New"
+    assert updated.color_hex == "#dc2626"
     assert edit_item.title == "Updated"
+    assert edit_item.color_hex == "#dc2626"
 
 
 def test_update_task_service_rejects_auto_order_follow_up(db_session):
@@ -158,6 +177,63 @@ def test_update_task_service_rejects_auto_order_follow_up(db_session):
         )
 
 
+def test_delete_task_service_deletes_user_task(db_session):
+    task = CreateTaskService(db_session).execute(
+        CreateTaskInput(title="Remove me", due_date=date(2026, 5, 11))
+    )
+
+    DeleteTaskService(db_session).execute(task.id)
+
+    assert db_session.get(Task, task.id) is None
+
+
+def test_delete_task_service_rejects_auto_order_follow_up(db_session):
+    order = create_order(db_session, order_date=date(2026, 5, 1))
+    GenerateOrderFollowUpTasksService(db_session).execute(date(2026, 5, 1))
+    task = db_session.scalar(select(Task).where(Task.order_id == order.id))
+
+    with pytest.raises(ValueError, match="Automatic follow-up tasks cannot be deleted"):
+        DeleteTaskService(db_session).execute(task.id)
+
+
+def test_delete_task_service_deletes_future_recurring_occurrences(db_session):
+    series = CreateTaskSeriesService(db_session).execute(
+        CreateTaskSeriesInput(
+            title="Recurring",
+            recurrence_type=TaskRecurrenceType.DAILY,
+            starts_on=date(2026, 5, 11),
+            ends_on=date(2026, 5, 14),
+        )
+    )
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 11))
+    first, second, *_ = db_session.scalars(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    ).all()
+
+    DeleteTaskService(db_session).execute(second.id, TaskSeriesUpdateScope.FUTURE)
+
+    remaining = db_session.scalars(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    ).all()
+    assert [task.id for task in remaining] == [first.id]
+
+
+def test_delete_task_service_rejects_whole_series_delete(db_session):
+    series = CreateTaskSeriesService(db_session).execute(
+        CreateTaskSeriesInput(
+            title="Recurring",
+            recurrence_type=TaskRecurrenceType.DAILY,
+            starts_on=date(2026, 5, 11),
+            ends_on=date(2026, 5, 14),
+        )
+    )
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 11))
+    task = db_session.scalar(select(Task).where(Task.task_series_id == series.id))
+
+    with pytest.raises(ValueError, match="Whole-series deletion is not supported."):
+        DeleteTaskService(db_session).execute(task.id, TaskSeriesUpdateScope.SERIES)
+
+
 def test_create_task_series_service_creates_recurring_series(db_session):
     series = CreateTaskSeriesService(db_session).execute(
         CreateTaskSeriesInput(
@@ -167,6 +243,7 @@ def test_create_task_series_service_creates_recurring_series(db_session):
             recurrence_interval=2,
             starts_on=date(2026, 5, 5),
             ends_on=date(2026, 6, 5),
+            color_hex="#16a34a",
         )
     )
 
@@ -177,7 +254,43 @@ def test_create_task_series_service_creates_recurring_series(db_session):
     assert series.recurrence_interval == 2
     assert series.starts_on == date(2026, 5, 5)
     assert series.ends_on == date(2026, 6, 5)
+    assert series.color_hex == "#16a34a"
     assert series.is_active
+
+
+def test_create_task_series_service_links_recurring_tasks_to_order(db_session):
+    order = create_order(db_session)
+    series = CreateTaskSeriesService(db_session).execute(
+        CreateTaskSeriesInput(
+            title="Ask for measurements",
+            recurrence_type=TaskRecurrenceType.WEEKLY,
+            starts_on=date(2026, 5, 11),
+            ends_on=date(2026, 5, 18),
+            order_id=order.id,
+        )
+    )
+
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 11))
+
+    tasks = db_session.scalars(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    ).all()
+    task_list = ListDashboardTasksService(db_session).execute(date(2026, 5, 11))
+    assert series.order_id == order.id
+    assert [task.order_id for task in tasks] == [order.id, order.id]
+    assert task_list.pending_today[0].order_number == order.order_number
+
+
+def test_create_task_series_service_rejects_missing_order_link(db_session):
+    with pytest.raises(ValueError, match="Order not found."):
+        CreateTaskSeriesService(db_session).execute(
+            CreateTaskSeriesInput(
+                title="Ask for measurements",
+                recurrence_type=TaskRecurrenceType.WEEKLY,
+                starts_on=date(2026, 5, 11),
+                order_id=999,
+            )
+        )
 
 
 def test_create_task_series_service_validates_input(db_session):
@@ -301,6 +414,7 @@ def test_generate_recurring_tasks_service_preserves_monthly_anchor_after_short_m
         CreateTaskSeriesInput(
             title="Month end review",
             recurrence_type=TaskRecurrenceType.MONTHLY,
+            monthly_rule=TaskMonthlyRecurrenceRule.LAST_DAY_OF_MONTH,
             starts_on=date(2026, 1, 31),
             ends_on=date(2026, 4, 30),
         )
@@ -318,6 +432,138 @@ def test_generate_recurring_tasks_service_preserves_monthly_anchor_after_short_m
         date(2026, 3, 31),
         date(2026, 4, 30),
     ]
+
+
+def test_generate_recurring_tasks_service_uses_specific_monthly_day(db_session):
+    series = CreateTaskSeriesService(db_session).execute(
+        CreateTaskSeriesInput(
+            title="Specific day",
+            recurrence_type=TaskRecurrenceType.MONTHLY,
+            monthly_rule=TaskMonthlyRecurrenceRule.SPECIFIC_DAY_OF_MONTH,
+            monthly_day=15,
+            starts_on=date(2026, 1, 3),
+            ends_on=date(2026, 3, 31),
+        )
+    )
+
+    GenerateRecurringTasksService(db_session).execute(date(2026, 1, 1))
+
+    tasks = db_session.scalars(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    ).all()
+    assert [task.due_date for task in tasks] == [
+        date(2026, 1, 15),
+        date(2026, 2, 15),
+        date(2026, 3, 15),
+    ]
+
+
+def test_generate_recurring_tasks_service_copies_series_color(db_session):
+    series = CreateTaskSeriesService(db_session).execute(
+        CreateTaskSeriesInput(
+            title="Color coded",
+            recurrence_type=TaskRecurrenceType.DAILY,
+            starts_on=date(2026, 5, 5),
+            ends_on=date(2026, 5, 5),
+            color_hex="#d97706",
+        )
+    )
+
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 5))
+
+    task = db_session.scalar(select(Task).where(Task.task_series_id == series.id))
+    assert task.color_hex == "#d97706"
+
+
+def test_update_task_service_updates_future_series_occurrences(db_session):
+    ApplicationSettingsService(db_session).set_task_generation_horizon_days(30)
+    series = CreateTaskSeriesService(db_session).execute(
+        CreateTaskSeriesInput(
+            title="Original",
+            recurrence_type=TaskRecurrenceType.DAILY,
+            starts_on=date(2026, 5, 11),
+            ends_on=date(2026, 5, 13),
+            color_hex="#2563eb",
+        )
+    )
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 11))
+    first, second, third = db_session.scalars(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    ).all()
+    CompleteTaskService(db_session).execute(first.id)
+
+    UpdateTaskService(db_session).execute(
+        second.id,
+        UpdateTaskInput(
+            title="Updated",
+            due_date=date(2026, 5, 12),
+            notes="New",
+            color_hex="#16a34a",
+            update_scope=TaskSeriesUpdateScope.FUTURE,
+            recurrence_type=TaskRecurrenceType.DAILY,
+            recurrence_interval=1,
+            ends_on=date(2026, 5, 14),
+        ),
+    )
+
+    tasks = db_session.scalars(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    ).all()
+    assert first in tasks
+    assert third not in tasks
+    assert [task.due_date for task in tasks] == [
+        date(2026, 5, 11),
+        date(2026, 5, 12),
+        date(2026, 5, 13),
+        date(2026, 5, 14),
+    ]
+    assert [task.title for task in tasks[1:]] == ["Updated", "Updated", "Updated"]
+    assert [task.color_hex for task in tasks[1:]] == ["#16a34a", "#16a34a", "#16a34a"]
+
+
+def test_update_task_service_whole_series_keeps_previous_occurrences(db_session):
+    ApplicationSettingsService(db_session).set_task_generation_horizon_days(30)
+    series = CreateTaskSeriesService(db_session).execute(
+        CreateTaskSeriesInput(
+            title="Original",
+            recurrence_type=TaskRecurrenceType.DAILY,
+            starts_on=date(2026, 5, 11),
+            ends_on=date(2026, 5, 13),
+            color_hex="#2563eb",
+        )
+    )
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 11))
+    first, second, third = db_session.scalars(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    ).all()
+
+    UpdateTaskService(db_session).execute(
+        second.id,
+        UpdateTaskInput(
+            title="Updated",
+            due_date=date(2026, 5, 12),
+            notes="New",
+            color_hex="#92400e",
+            update_scope=TaskSeriesUpdateScope.SERIES,
+            recurrence_type=TaskRecurrenceType.DAILY,
+            recurrence_interval=1,
+            ends_on=date(2026, 5, 14),
+        ),
+    )
+
+    tasks = db_session.scalars(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    ).all()
+    assert first in tasks
+    assert third not in tasks
+    assert [task.due_date for task in tasks] == [
+        date(2026, 5, 11),
+        date(2026, 5, 12),
+        date(2026, 5, 13),
+        date(2026, 5, 14),
+    ]
+    assert [task.title for task in tasks] == ["Updated", "Updated", "Updated", "Updated"]
+    assert [task.color_hex for task in tasks] == ["#92400e"] * 4
 
 
 def test_generate_order_follow_up_tasks_service_creates_one_open_task_per_active_order(
@@ -355,6 +601,37 @@ def test_generate_order_follow_up_tasks_service_uses_today_for_overdue_initial_f
 
     task = db_session.scalar(select(Task).where(Task.is_auto_order_follow_up.is_(True)))
     assert task.due_date == date(2026, 5, 5)
+
+
+def test_recalculate_open_follow_ups_replaces_open_tasks_with_current_setting(
+    db_session,
+):
+    order = create_order(db_session, order_date=date(2026, 5, 1))
+    custom_task = CreateTaskService(db_session).execute(
+        CreateTaskInput(
+            title="Custom reminder",
+            due_date=date(2026, 5, 20),
+            order_id=order.id,
+        )
+    )
+    ApplicationSettingsService(db_session).set_default_order_follow_up_days(7)
+    GenerateOrderFollowUpTasksService(db_session).execute(date(2026, 5, 1))
+    old_auto_task = db_session.scalar(
+        select(Task).where(Task.is_auto_order_follow_up.is_(True))
+    )
+    ApplicationSettingsService(db_session).set_default_order_follow_up_days(2)
+
+    recalculated_count = GenerateOrderFollowUpTasksService(
+        db_session
+    ).recalculate_open_follow_ups(date(2026, 5, 1))
+
+    tasks = db_session.scalars(select(Task).where(Task.order_id == order.id)).all()
+    auto_tasks = [task for task in tasks if task.is_auto_order_follow_up]
+    assert recalculated_count == 1
+    assert len(auto_tasks) == 1
+    assert auto_tasks[0].id != old_auto_task.id
+    assert auto_tasks[0].due_date == date(2026, 5, 3)
+    assert custom_task in tasks
 
 
 def test_complete_auto_order_follow_up_schedules_next_when_order_remains_active(
