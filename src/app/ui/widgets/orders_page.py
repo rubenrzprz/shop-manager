@@ -28,6 +28,7 @@ from app.ui.localization import order_status_label, t
 
 class OrdersPage(QWidget):
     order_changed = Signal()
+    task_changed = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -187,7 +188,8 @@ class OrdersPage(QWidget):
             default_order_id=order.id,
             default_order_label=f"{order.order_number} - {order.customer_name}",
         )
-        dialog.exec()
+        if dialog.exec():
+            self.task_changed.emit()
 
     def advance_selected_order_status(self) -> None:
         order = self._selected_order()

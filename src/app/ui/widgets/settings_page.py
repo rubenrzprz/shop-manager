@@ -19,6 +19,7 @@ from app.application.services.settings import (
     MIN_TASK_GENERATION_HORIZON_DAYS,
     ApplicationSettingsService,
 )
+from app.application.services.tasks import GenerateOrderFollowUpTasksService
 from app.domain.enums import OrderStatus
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialog_helpers import question
@@ -56,6 +57,10 @@ class SettingsPage(QWidget):
         )
         self._default_order_follow_up_description = QLabel()
         self._default_order_follow_up_description.setWordWrap(True)
+        self._recalculate_follow_ups_button = QPushButton()
+        self._recalculate_follow_ups_button.clicked.connect(
+            self.recalculate_order_follow_ups
+        )
         self._strict_order_workflow_checkbox = QCheckBox()
         self._strict_order_workflow_description = QLabel()
         self._strict_order_workflow_description.setWordWrap(True)
@@ -101,6 +106,7 @@ class SettingsPage(QWidget):
         layout.addLayout(self._form)
         layout.addWidget(self._task_generation_horizon_description)
         layout.addWidget(self._default_order_follow_up_description)
+        layout.addWidget(self._recalculate_follow_ups_button)
         layout.addWidget(self._strict_order_workflow_checkbox)
         layout.addWidget(self._strict_order_workflow_description)
         layout.addWidget(self._order_status_group)
@@ -124,6 +130,7 @@ class SettingsPage(QWidget):
         self._default_order_follow_up_description.setText(
             t("Automatic active-order follow-up reminders repeat after this many days.")
         )
+        self._recalculate_follow_ups_button.setText(t("Recalculate open order follow-ups"))
         for index in range(self._language_input.count()):
             language_code = self._language_input.itemData(index)
             language_name = "Spanish" if language_code == "es" else "English"
@@ -201,6 +208,47 @@ class SettingsPage(QWidget):
         except Exception as exc:
             session.rollback()
             QMessageBox.critical(self, t("Could not save settings"), str(exc))
+        finally:
+            session.close()
+
+    def recalculate_order_follow_ups(self) -> None:
+        response = question(
+            self,
+            t("Recalculate open order follow-ups"),
+            t(
+                "Recalculate open automatic follow-ups for active orders? This will delete "
+                "current open automatic follow-up reminders and recreate them using the "
+                "current default follow-up days. Completed follow-ups and custom reminders "
+                "will not be changed."
+            ),
+        )
+        if response != QMessageBox.Yes:
+            return
+
+        try:
+            session = SessionLocal()
+        except Exception as exc:
+            QMessageBox.critical(self, t("Could not update task"), str(exc))
+            return
+
+        try:
+            ApplicationSettingsService(session).set_default_order_follow_up_days(
+                self._default_order_follow_up_input.value()
+            )
+            recalculated_count = GenerateOrderFollowUpTasksService(
+                session
+            ).recalculate_open_follow_ups()
+            session.commit()
+            QMessageBox.information(
+                self,
+                t("Order follow-ups recalculated"),
+                t("{count} order follow-ups recalculated.").format(
+                    count=recalculated_count
+                ),
+            )
+        except Exception as exc:
+            session.rollback()
+            QMessageBox.critical(self, t("Could not update task"), str(exc))
         finally:
             session.close()
 
