@@ -19,17 +19,17 @@ application services to keep business logic out of the interface layer.
 - 🧾 Orders: create, edit, calculate totals, apply discounts, validate deadlines
 - 🔁 Order workflows: configurable statuses, advance/revert/cancel/recover actions
 - ✅ Tasks: create one-off, order-linked, and recurring reminders, generate active-order
-  follow-up reminders, browse tasks by selected date or month grid, edit task occurrences, complete
-  and reopen tasks
-- ⚙️ Settings: typed application settings backed by the database
+  follow-up reminders, browse tasks by selected date or month grid, edit task occurrences/series,
+  assign reminder colors, complete and reopen tasks
+- ⚙️ Settings: typed application settings backed by the database, including follow-up recalculation
 - 🌐 Localization: English and Spanish UI labels/messages
 - 🏠 Dashboard shell: entry tab with shortcut chips, order overview, and daily task reminders
 
 ## What Is Coming 🧭
 
 - 🧭 Dashboard and reminder UI polish
-- 🔁 Recurring reminder editing polish
 - 🏷️ Product category grouping polish
+- 🔁 Advanced reminder recurrence polish
 - 📦 Stock movements
 - 🚚 Shipment workflows
 
@@ -159,12 +159,13 @@ SQLAlchemy models stay behind service boundaries.
 
 Near-term implementation path:
 
-1. Dashboard and reminder UI polish
-   - continue improving dashboard reminder ergonomics after real-world use
-   - consider customizable task colors for calendar/dashboard blocks
-2. Recurring reminder editing polish
-   - edit future recurring occurrences or whole recurring series
-   - consider advanced monthly recurrence rules
+1. Dashboard-centered UX and tab UI refresh
+   - open the app maximized by default
+   - keep dashboard quick actions/order edits in modal workflows without switching tabs
+   - apply shared softer UI patterns across tabs
+2. Advanced reminder recurrence polish
+   - refine recurrence editing UX after real-world use
+   - consider richer recurrence rules only when needed
 3. Product category browsing polish
    - consider grouping the product table by assigned categories if filtering is not enough
    - consider category filters in order product/variant selection
