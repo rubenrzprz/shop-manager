@@ -9,12 +9,18 @@ from app.application.dto.tasks import (
     CalendarTaskDay,
     CreateTaskInput,
     CreateTaskSeriesInput,
+    DEFAULT_TASK_COLOR_HEX,
     DashboardTaskList,
     TaskListItem,
     UpdateTaskInput,
 )
 from app.application.services.settings import ApplicationSettingsService
-from app.domain.enums import OrderStatus, TaskRecurrenceType
+from app.domain.enums import (
+    OrderStatus,
+    TaskMonthlyRecurrenceRule,
+    TaskRecurrenceType,
+    TaskSeriesUpdateScope,
+)
 from app.infrastructure.db.models import Order, Task, TaskSeries
 
 ACTIVE_ORDER_FOLLOW_UP_STATUSES = {
@@ -38,6 +44,7 @@ class CreateTaskService:
             order_id=data.order_id,
             title=data.title.strip(),
             notes=data.notes,
+            color_hex=_normalize_task_color(data.color_hex),
             due_date=data.due_date,
         )
 
@@ -50,6 +57,7 @@ class CreateTaskService:
     def _validate_task_input(data: CreateTaskInput) -> None:
         if not data.title or not data.title.strip():
             raise ValueError("Task title is required.")
+        _normalize_task_color(data.color_hex)
 
 
 class GetTaskForEditService:
@@ -57,11 +65,50 @@ class GetTaskForEditService:
         self._session = session
 
     def execute(self, task_id: int) -> TaskListItem:
-        task = self._session.get(Task, task_id, options=[joinedload(Task.order)])
+        task = self._session.get(
+            Task,
+            task_id,
+            options=[joinedload(Task.order), joinedload(Task.series)],
+        )
         if task is None:
             raise ValueError("Task not found.")
 
         return ListDashboardTasksService._to_list_item(task)
+
+
+class DeleteTaskService:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(
+        self,
+        task_id: int,
+        scope: TaskSeriesUpdateScope = TaskSeriesUpdateScope.OCCURRENCE,
+    ) -> None:
+        task = self._session.get(Task, task_id, options=[joinedload(Task.series)])
+        if task is None:
+            raise ValueError("Task not found.")
+        if task.is_auto_order_follow_up:
+            raise ValueError("Automatic follow-up tasks cannot be deleted.")
+        if scope != TaskSeriesUpdateScope.OCCURRENCE and task.series is None:
+            raise ValueError("Task is not part of a recurring series.")
+        if scope == TaskSeriesUpdateScope.SERIES:
+            raise ValueError("Whole-series deletion is not supported.")
+
+        if scope == TaskSeriesUpdateScope.OCCURRENCE:
+            self._session.delete(task)
+        else:
+            self._delete_future_occurrences(task)
+        self._session.flush()
+
+    def _delete_future_occurrences(self, task: Task) -> None:
+        tasks = self._session.scalars(
+            select(Task)
+            .where(Task.task_series_id == task.task_series_id)
+            .where(Task.due_date >= task.due_date)
+        ).all()
+        for occurrence in tasks:
+            self._session.delete(occurrence)
 
 
 class UpdateTaskService:
@@ -72,17 +119,142 @@ class UpdateTaskService:
         CreateTaskService._validate_task_input(
             CreateTaskInput(title=data.title, due_date=data.due_date, notes=data.notes)
         )
-        task = self._session.get(Task, task_id)
+        task = self._session.get(Task, task_id, options=[joinedload(Task.series)])
         if task is None:
             raise ValueError("Task not found.")
         if task.is_auto_order_follow_up:
             raise ValueError("Automatic follow-up tasks cannot be edited.")
+        if data.update_scope != TaskSeriesUpdateScope.OCCURRENCE and task.series is None:
+            raise ValueError("Task is not part of a recurring series.")
 
-        task.title = data.title.strip()
-        task.notes = data.notes
-        task.due_date = data.due_date
+        if data.update_scope == TaskSeriesUpdateScope.OCCURRENCE:
+            self._apply_task_snapshot(task, data)
+        elif data.update_scope == TaskSeriesUpdateScope.FUTURE:
+            task = self._update_future_occurrences(task, data)
+        else:
+            task = self._update_whole_series(task, data)
         self._session.flush()
         return task
+
+    def _apply_task_snapshot(self, task: Task, data: UpdateTaskInput) -> None:
+        task.title = data.title.strip()
+        task.notes = data.notes
+        task.color_hex = _normalize_task_color(data.color_hex)
+        task.due_date = data.due_date
+
+    def _update_future_occurrences(self, task: Task, data: UpdateTaskInput) -> Task:
+        series = task.series
+        if series is None:
+            raise ValueError("Task is not part of a recurring series.")
+        recurrence_type = data.recurrence_type or series.recurrence_type
+        interval = data.recurrence_interval or series.recurrence_interval
+        self._validate_series_fields(
+            title=data.title,
+            recurrence_interval=interval,
+            starts_on=data.due_date,
+            ends_on=data.ends_on,
+            monthly_rule=data.monthly_rule,
+            monthly_day=data.monthly_day,
+        )
+        self._delete_incomplete_occurrences(series.id, task.due_date)
+        series.title = data.title.strip()
+        series.notes = data.notes
+        series.color_hex = _normalize_task_color(data.color_hex)
+        series.recurrence_type = recurrence_type
+        series.recurrence_interval = interval
+        series.monthly_rule = data.monthly_rule
+        series.monthly_day = data.monthly_day
+        series.starts_on = data.due_date
+        series.ends_on = data.ends_on
+        GenerateRecurringTasksService(self._session).execute(date.today())
+        return self._first_generated_occurrence(series.id, max(date.today(), data.due_date))
+
+    def _update_whole_series(self, task: Task, data: UpdateTaskInput) -> Task:
+        series = task.series
+        if series is None:
+            raise ValueError("Task is not part of a recurring series.")
+        recurrence_type = data.recurrence_type or series.recurrence_type
+        interval = data.recurrence_interval or series.recurrence_interval
+        self._validate_series_fields(
+            title=data.title,
+            recurrence_interval=interval,
+            starts_on=data.due_date,
+            ends_on=data.ends_on,
+            monthly_rule=data.monthly_rule,
+            monthly_day=data.monthly_day,
+        )
+        self._update_existing_occurrence_snapshots(series.id, data)
+        self._delete_incomplete_occurrences(series.id, task.due_date)
+        series.title = data.title.strip()
+        series.notes = data.notes
+        series.color_hex = _normalize_task_color(data.color_hex)
+        series.recurrence_type = recurrence_type
+        series.recurrence_interval = interval
+        series.monthly_rule = data.monthly_rule
+        series.monthly_day = data.monthly_day
+        series.starts_on = data.due_date
+        series.ends_on = data.ends_on
+        GenerateRecurringTasksService(self._session).execute(date.today())
+        return self._first_generated_occurrence(series.id, max(date.today(), data.due_date))
+
+    def _update_existing_occurrence_snapshots(
+        self,
+        series_id: int,
+        data: UpdateTaskInput,
+    ) -> None:
+        tasks = self._session.scalars(
+            select(Task)
+            .where(Task.task_series_id == series_id)
+        ).all()
+        for task in tasks:
+            task.title = data.title.strip()
+            task.notes = data.notes
+            task.color_hex = _normalize_task_color(data.color_hex)
+
+    def _delete_incomplete_occurrences(self, series_id: int, from_day: date) -> None:
+        tasks = self._session.scalars(
+            select(Task)
+            .where(Task.task_series_id == series_id)
+            .where(Task.completed_at.is_(None))
+            .where(Task.due_date >= from_day)
+        ).all()
+        for task in tasks:
+            self._session.delete(task)
+        self._session.flush()
+
+    def _first_generated_occurrence(self, series_id: int, from_day: date) -> Task:
+        task = self._session.scalar(
+            select(Task)
+            .where(Task.task_series_id == series_id)
+            .where(Task.due_date >= from_day)
+            .order_by(Task.due_date, Task.id)
+            .limit(1)
+        )
+        if task is None:
+            raise ValueError("Recurring task update did not generate the selected occurrence.")
+        return task
+
+    @staticmethod
+    def _validate_series_fields(
+        *,
+        title: str,
+        recurrence_interval: int,
+        starts_on: date,
+        ends_on: date | None,
+        monthly_rule: TaskMonthlyRecurrenceRule,
+        monthly_day: int | None,
+    ) -> None:
+        CreateTaskSeriesService._validate_task_series_input(
+            CreateTaskSeriesInput(
+            title=title,
+            recurrence_type=TaskRecurrenceType.DAILY,
+                recurrence_interval=recurrence_interval,
+                starts_on=starts_on,
+                ends_on=ends_on,
+                monthly_rule=monthly_rule,
+                monthly_day=monthly_day,
+            )
+        )
 
 
 class CreateTaskSeriesService:
@@ -91,12 +263,18 @@ class CreateTaskSeriesService:
 
     def execute(self, data: CreateTaskSeriesInput) -> TaskSeries:
         self._validate_task_series_input(data)
+        if data.order_id is not None and self._session.get(Order, data.order_id) is None:
+            raise ValueError("Order not found.")
 
         series = TaskSeries(
+            order_id=data.order_id,
             title=data.title.strip(),
             notes=data.notes,
+            color_hex=_normalize_task_color(data.color_hex),
             recurrence_type=data.recurrence_type,
             recurrence_interval=data.recurrence_interval,
+            monthly_rule=data.monthly_rule,
+            monthly_day=data.monthly_day,
             starts_on=data.starts_on,
             ends_on=data.ends_on,
             is_active=True,
@@ -115,6 +293,10 @@ class CreateTaskSeriesService:
             raise ValueError("Task recurrence interval must be at least 1.")
         if data.ends_on is not None and data.ends_on < data.starts_on:
             raise ValueError("Task series end date cannot be before the start date.")
+        if data.monthly_rule == TaskMonthlyRecurrenceRule.SPECIFIC_DAY_OF_MONTH:
+            if data.monthly_day is None or not 1 <= data.monthly_day <= 31:
+                raise ValueError("Task monthly day must be between 1 and 31.")
+        _normalize_task_color(data.color_hex)
 
 
 class GenerateRecurringTasksService:
@@ -154,8 +336,10 @@ class GenerateRecurringTasksService:
                 self._session.add(
                     Task(
                         task_series_id=series.id,
+                        order_id=series.order_id,
                         title=series.title,
                         notes=series.notes,
+                        color_hex=series.color_hex,
                         due_date=due_date,
                     )
                 )
@@ -201,21 +385,21 @@ class ListDashboardTasksService:
 
         overdue = self._session.scalars(
             select(Task)
-            .options(joinedload(Task.order))
+            .options(joinedload(Task.order), joinedload(Task.series))
             .where(Task.completed_at.is_(None))
             .where(Task.due_date < selected_day)
             .order_by(Task.due_date, Task.id)
         ).all()
         pending_today = self._session.scalars(
             select(Task)
-            .options(joinedload(Task.order))
+            .options(joinedload(Task.order), joinedload(Task.series))
             .where(Task.completed_at.is_(None))
             .where(Task.due_date == selected_day)
             .order_by(Task.id)
         ).all()
         completed_today = self._session.scalars(
             select(Task)
-            .options(joinedload(Task.order))
+            .options(joinedload(Task.order), joinedload(Task.series))
             .where(Task.completed_at >= completed_start_utc)
             .where(Task.completed_at < completed_end_utc)
             .order_by(Task.completed_at.desc(), Task.id.desc())
@@ -238,6 +422,17 @@ class ListDashboardTasksService:
             order_id=task.order_id,
             order_number=task.order.order_number if task.order is not None else None,
             is_auto_order_follow_up=task.is_auto_order_follow_up,
+            color_hex=task.color_hex,
+            task_series_id=task.task_series_id,
+            series_order_id=task.series.order_id if task.series is not None else None,
+            recurrence_type=task.series.recurrence_type if task.series is not None else None,
+            recurrence_interval=(
+                task.series.recurrence_interval if task.series is not None else None
+            ),
+            monthly_rule=task.series.monthly_rule if task.series is not None else None,
+            monthly_day=task.series.monthly_day if task.series is not None else None,
+            series_starts_on=task.series.starts_on if task.series is not None else None,
+            series_ends_on=task.series.ends_on if task.series is not None else None,
         )
 
 
@@ -251,7 +446,7 @@ class ListCalendarTasksService:
 
         tasks = self._session.scalars(
             select(Task)
-            .options(joinedload(Task.order))
+            .options(joinedload(Task.order), joinedload(Task.series))
             .where(Task.due_date >= start_day)
             .where(Task.due_date <= end_day)
             .order_by(Task.due_date, Task.completed_at.is_not(None), Task.id)
@@ -354,6 +549,22 @@ class GenerateOrderFollowUpTasksService:
             self._session.delete(follow_up)
         self._session.flush()
 
+    def recalculate_open_follow_ups(self, today: date | None = None) -> int:
+        selected_day = today or date.today()
+        orders = self._session.scalars(
+            select(Order)
+            .where(Order.status.in_(ACTIVE_ORDER_FOLLOW_UP_STATUSES))
+            .order_by(Order.id)
+        ).all()
+        recalculated_count = 0
+        for order in orders:
+            self.delete_open_follow_ups_for_order(order.id)
+            if self.ensure_open_follow_up_for_order(order, selected_day) is not None:
+                recalculated_count += 1
+
+        self._session.flush()
+        return recalculated_count
+
     def schedule_next_for_task(self, task: Task) -> Task | None:
         if task.order_id is None:
             return None
@@ -425,6 +636,7 @@ class GenerateOrderFollowUpTasksService:
             is_auto_order_follow_up=True,
             title=f"Follow up {order.order_number}",
             notes="Automatic active-order follow-up reminder.",
+            color_hex="#7c3aed",
             due_date=calculated_due_date,
         )
 
@@ -446,6 +658,8 @@ def _iter_occurrence_dates(
         series.recurrence_type,
         series.recurrence_interval,
         occurrence_index,
+        getattr(series, "monthly_rule", TaskMonthlyRecurrenceRule.DAY_OF_MONTH),
+        getattr(series, "monthly_day", None),
     )
     generation_end = min(
         generation_until,
@@ -459,6 +673,8 @@ def _iter_occurrence_dates(
             series.recurrence_type,
             series.recurrence_interval,
             occurrence_index + 1,
+            getattr(series, "monthly_rule", TaskMonthlyRecurrenceRule.DAY_OF_MONTH),
+            getattr(series, "monthly_day", None),
         )
         occurrence_index += 1
 
@@ -491,20 +707,52 @@ def _next_occurrence_date(
     recurrence_type: TaskRecurrenceType,
     interval: int,
     occurrence_index: int,
+    monthly_rule: TaskMonthlyRecurrenceRule = TaskMonthlyRecurrenceRule.DAY_OF_MONTH,
+    monthly_day: int | None = None,
 ) -> date:
     if recurrence_type == TaskRecurrenceType.DAILY:
         return starts_on + timedelta(days=interval * occurrence_index)
     if recurrence_type == TaskRecurrenceType.WEEKLY:
         return starts_on + timedelta(weeks=interval * occurrence_index)
     if recurrence_type == TaskRecurrenceType.MONTHLY:
-        return _add_months(starts_on, interval * occurrence_index)
+        return _add_months(
+            starts_on,
+            interval * occurrence_index,
+            monthly_rule=monthly_rule,
+            monthly_day=monthly_day,
+        )
 
     raise ValueError("Task recurrence type is unsupported.")
 
 
-def _add_months(current_date: date, months: int) -> date:
+def _add_months(
+    current_date: date,
+    months: int,
+    *,
+    monthly_rule: TaskMonthlyRecurrenceRule = TaskMonthlyRecurrenceRule.DAY_OF_MONTH,
+    monthly_day: int | None = None,
+) -> date:
     month_index = current_date.month - 1 + months
     year = current_date.year + month_index // 12
     month = month_index % 12 + 1
-    day = min(current_date.day, monthrange(year, month)[1])
+    last_day = monthrange(year, month)[1]
+    if monthly_rule == TaskMonthlyRecurrenceRule.FIRST_DAY_OF_MONTH:
+        day = 1
+    elif monthly_rule == TaskMonthlyRecurrenceRule.LAST_DAY_OF_MONTH:
+        day = last_day
+    elif monthly_rule == TaskMonthlyRecurrenceRule.SPECIFIC_DAY_OF_MONTH:
+        day = min(monthly_day or current_date.day, last_day)
+    else:
+        day = min(current_date.day, last_day)
     return date(year, month, day)
+
+
+def _normalize_task_color(color_hex: str | None) -> str:
+    color = (color_hex or DEFAULT_TASK_COLOR_HEX).strip()
+    if len(color) != 7 or not color.startswith("#"):
+        raise ValueError("Task color must be a hex color.")
+    try:
+        int(color[1:], 16)
+    except ValueError as exc:
+        raise ValueError("Task color must be a hex color.") from exc
+    return color.lower()
