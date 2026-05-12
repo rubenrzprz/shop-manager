@@ -136,24 +136,29 @@ Implemented behavior:
 
 Later options:
 
-- customizable task colors or task categories for calendar/dashboard blocks
+- task categories if colors are not enough for calendar/dashboard organization
 - reschedule tasks
-- edit future recurring occurrences
-- edit the whole recurrence series
+- refine recurring edit UX after real-world use
+- dashboard-centered workflows where quick actions and dashboard order edits open dialogs in place
+- maximized startup and large workflow dialog sizing as part of the next UX refresh
 
 ## Manual Recurring Reminders
 
-Manual recurring reminders let the operator create standalone `TaskSeries` rows from the task
-dialog.
+Manual recurring reminders let the operator create standalone or order-linked `TaskSeries` rows
+from the task dialog.
 
 Implemented v1 behavior:
 
-- create a recurring reminder with title, notes, recurrence type, interval, start date, and
-  optional end date
+- create a recurring reminder with optional order link, title, notes, recurrence type, interval,
+  start date, and optional end date
 - generate missing occurrences immediately after saving through the configured
   `task_generation_horizon_days`
-- keep generated occurrence title/notes as snapshots
-- defer editing existing series until after creation is useful in day-to-day use
+- keep generated occurrence title/notes/color as snapshots
+- edit one occurrence, this-and-future occurrences, or the whole series from an occurrence
+- choose first-day, same-day-as-start, specific-day, or last-day monthly recurrence
+- assign task colors that render in dashboard cards and calendar blocks
+- recalculate open automatic order follow-ups from settings without changing completed follow-up
+  history or custom reminders
 
 ## Suggested Slice Order
 
@@ -188,3 +193,9 @@ Implemented v1 behavior:
 10. Dashboard/UI polish
    - completed with shortcut chips, an orders overview column, and a daily tasks rail
    - continue task/reminder ergonomics after real-world use
+11. Recurring reminder and task color polish
+   - completed task colors for dashboard/calendar
+   - completed occurrence, future, and whole-series edit scopes
+   - completed monthly first-day, same-day, specific-day, and last-day rules
+   - completed order-linked recurring reminders
+   - completed explicit automatic follow-up recalculation action

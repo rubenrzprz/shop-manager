@@ -33,6 +33,7 @@ from app.infrastructure.db.session import SessionLocal
 from app.ui.date_edit import AppDateEdit
 from app.ui.dialogs.task_dialog import TaskDialog
 from app.ui.localization import order_status_label, t
+from app.ui.task_colors import task_background
 
 
 class DashboardPage(QWidget):
@@ -472,7 +473,7 @@ class DashboardPage(QWidget):
         section: str,
     ) -> QFrame:
         frame = QFrame()
-        background, border, icon = self._task_row_treatment(section)
+        background, border, icon = self._task_row_treatment(task, section)
         frame.setObjectName("taskRow")
         self._register_task_click_target(frame, task)
         frame.setStyleSheet(
@@ -550,13 +551,18 @@ class DashboardPage(QWidget):
         return f"{task.due_date.isoformat()} - {title}"
 
     @staticmethod
-    def _task_row_treatment(section: str) -> tuple[str, str, str]:
-        if section == "overdue":
-            return "#ffedd5", "#fdba74", "!"
+    def _task_row_treatment(task: TaskListItem, section: str) -> tuple[str, str, str]:
+        icon = "!"
         if section == "completed":
-            return "#dcfce7", "#86efac", "✓"
+            icon = "✓"
+        elif section != "overdue":
+            icon = "○"
+        if section == "overdue":
+            icon = "!"
+        if task.is_auto_order_follow_up:
+            return "#ede9fe", "#7c3aed", icon
 
-        return "#ffffff", "#e5e7eb", "○"
+        return task_background(task.color_hex), task.color_hex, icon
 
     @staticmethod
     def _deadline_distance_label(deadline: date) -> str:

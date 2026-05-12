@@ -66,7 +66,6 @@ _TRANSLATIONS = {
         "Completed Today": "Completadas hoy",
         "Pending": "Pendientes",
         "Pending tasks": "Tareas pendientes",
-        "Completed": "Completadas",
         "Completed tasks": "Tareas completadas",
         "No overdue tasks.": "No hay tareas atrasadas.",
         "No pending tasks for today.": "No hay tareas pendientes para hoy.",
@@ -94,8 +93,40 @@ _TRANSLATIONS = {
         "Follow up": "Seguimiento",
         "Title": "Título",
         "Due date": "Fecha de vencimiento",
+        "Light gray": "Gris claro",
+        "Blue": "Azul",
+        "Sky": "Celeste",
+        "Teal": "Verde azulado",
+        "Green": "Verde",
+        "Lime": "Lima",
+        "Yellow": "Amarillo",
+        "Amber": "Ámbar",
+        "Orange": "Naranja",
+        "Red": "Rojo",
+        "Rose": "Rosa",
+        "Purple": "Morado",
+        "Pink": "Fucsia",
+        "Brown": "Marrón",
+        "Slate": "Pizarra",
+        "Black": "Negro",
+        "Apply to": "Aplicar a",
+        "This task only": "Solo esta tarea",
+        "This and future tasks": "Esta y futuras tareas",
+        "Whole series": "Toda la serie",
+        "Monthly rule": "Regla mensual",
+        "First day of month": "Primer día del mes",
+        "Same day as start date": "Mismo día que la fecha inicial",
+        "Specific day of month": "Día específico del mes",
+        "Day of month": "Día del mes",
+        "Last day of month": "Último día del mes",
         "Complete": "Completar",
         "Reopen": "Reabrir",
+        "Delete": "Eliminar",
+        "Delete task": "Eliminar tarea",
+        "Delete this task?": "¿Eliminar esta tarea?",
+        "Delete recurring task": "Eliminar tarea recurrente",
+        "Delete which recurring tasks?": "¿Qué tareas recurrentes quieres eliminar?",
+        "Could not delete task": "No se pudo eliminar la tarea",
         "Could not create task": "No se pudo crear la tarea",
         "Could not load task": "No se pudo cargar la tarea",
         "Could not load tasks": "No se pudieron cargar las tareas",
@@ -118,6 +149,9 @@ _TRANSLATIONS = {
         "Automatic follow-up tasks cannot be edited.": (
             "Las tareas automáticas de seguimiento no se pueden editar."
         ),
+        "Automatic follow-up tasks cannot be deleted.": (
+            "Las tareas automáticas de seguimiento no se pueden eliminar."
+        ),
         "Automatic active-order follow-up reminder.": (
             "Recordatorio automático de seguimiento de pedido activo."
         ),
@@ -127,6 +161,13 @@ _TRANSLATIONS = {
         ),
         "Task series end date cannot be before the start date.": (
             "La fecha de fin de la serie de tareas no puede ser anterior a la fecha de inicio."
+        ),
+        "Task monthly day must be between 1 and 31.": (
+            "El día mensual de la tarea debe estar entre 1 y 31."
+        ),
+        "Task color must be a hex color.": "El color de la tarea debe ser hexadecimal.",
+        "Task is not part of a recurring series.": (
+            "La tarea no forma parte de una serie recurrente."
         ),
         "Task generation horizon days must be between 30 and 365.": (
             "Los días del horizonte de generación de tareas deben estar entre 30 y 365."
@@ -414,6 +455,17 @@ _TRANSLATIONS = {
         "Automatic active-order follow-up reminders repeat after this many days.": (
             "Los recordatorios automáticos de seguimiento de pedidos activos se repiten "
             "después de esta cantidad de días."
+        ),
+        "Recalculate open order follow-ups": "Recalcular seguimientos abiertos de pedidos",
+        "Recalculate open automatic follow-ups for active orders? This will delete current open automatic follow-up reminders and recreate them using the current default follow-up days. Completed follow-ups and custom reminders will not be changed.": (
+            "¿Recalcular los seguimientos automáticos abiertos de pedidos activos? Esto "
+            "eliminará los recordatorios automáticos abiertos actuales y los recreará usando "
+            "los días de seguimiento predeterminados actuales. Los seguimientos completados y "
+            "los recordatorios personalizados no cambiarán."
+        ),
+        "Order follow-ups recalculated": "Seguimientos de pedidos recalculados",
+        "{count} order follow-ups recalculated.": (
+            "{count} seguimientos de pedidos recalculados."
         ),
         "Default order follow-up days must be between 1 and 365.": (
             "Los días de seguimiento predeterminado de pedidos deben estar entre 1 y 365."

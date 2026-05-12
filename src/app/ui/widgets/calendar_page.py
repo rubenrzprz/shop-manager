@@ -27,6 +27,7 @@ from app.application.services.tasks import (
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialogs.task_dialog import TaskDialog
 from app.ui.localization import t
+from app.ui.task_colors import task_background
 
 
 class CalendarPage(QWidget):
@@ -450,14 +451,9 @@ class CalendarPage(QWidget):
                 "background: #ede9fe; color: #312e81; border-left: 4px solid #7c3aed; "
                 "border-radius: 3px; padding: 1px 4px;"
             )
-        if task.order_id is not None:
-            return (
-                "background: #dbeafe; color: #1e3a8a; border-left: 4px solid #2563eb; "
-                "border-radius: 3px; padding: 1px 4px;"
-            )
         return (
-            "background: #dcfce7; color: #14532d; border-left: 4px solid #16a34a; "
-            "border-radius: 3px; padding: 1px 4px;"
+            f"background: {task_background(task.color_hex)}; color: #111827; "
+            f"border-left: 4px solid {task.color_hex}; border-radius: 3px; padding: 1px 4px;"
         )
 
     @staticmethod

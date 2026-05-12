@@ -161,6 +161,9 @@ The project currently has these completed vertical slices:
   - daily task sections show overdue, pending today, and completed today tasks
   - create standalone one-off tasks
   - create standalone recurring reminders from the task dialog
+  - create order-linked recurring reminders from the selected order reminder flow
+  - edit recurring task occurrences, future occurrences, or a whole recurring series
+  - assign task colors that render in dashboard cards and calendar blocks
   - create custom order-linked reminder tasks
   - generate recurring task occurrences from active task series
   - generate automatic active-order follow-up reminders
@@ -209,6 +212,7 @@ The project currently has these completed vertical slices:
   - strict order workflow toggle
   - configurable enabled order statuses
   - configurable recurring task generation horizon
+  - explicit recalculation action for open automatic order follow-up reminders
 - Spanish Localization v1
   - `app_language` setting
   - lightweight UI translation helper
@@ -291,17 +295,22 @@ The project currently has these completed vertical slices:
 - Custom order-linked `Task` rows use optional `order_id`; the order page can create a reminder
   for the selected order, and dashboard task labels show the order number when present.
 - Recurring tasks use `TaskSeries` plus generated `Task` occurrences:
-  - `TaskSeries`: title, notes, recurrence type/interval, starts on, optional ends on, active flag
-  - `Task`: optional series, title/notes snapshot, due date, completed timestamp
+  - `TaskSeries`: optional order, title, notes, color, recurrence type/interval, monthly rule,
+    optional monthly day, starts on, optional ends on, active flag
+  - `Task`: optional series, title/notes/color snapshot, due date, completed timestamp
 - Recurring occurrences are generated only through a configurable horizon, not forever.
 - `task_generation_horizon_days` is implemented as a typed setting, default `90`, allowed range
   `30` to `365`, and exposed in the settings UI.
 - On app startup, an idempotent generation service creates missing recurring task occurrences from
   today through `today + task_generation_horizon_days`.
 - Generated recurring tasks should be unique per `task_series_id` and `due_date`.
-- Recurring series currently support daily, weekly, and monthly intervals.
+- Recurring series currently support daily, weekly, and monthly intervals. Monthly recurrence can
+  use first-day, same-day-as-start, specific-day, or last-day behavior.
 - Creating standalone recurring series from the task dialog is implemented.
-- Editing existing recurring series is deferred beyond manual recurring reminder creation.
+- Creating order-linked recurring series from the selected order reminder flow is implemented.
+- Editing existing recurring series from a task occurrence is implemented for one occurrence, future
+  occurrences, or the whole series. Future/series edits regenerate incomplete generated tasks;
+  completed task history keeps its due dates.
 - `default_order_follow_up_days` is implemented as a typed setting, default `7`, allowed range
   `1` to `365`, and exposed in the settings UI.
 - Automatic order follow-up reminders are generated for active orders without an open automatic
@@ -312,19 +321,23 @@ The project currently has these completed vertical slices:
   completed and cancelled orders stop producing automatic follow-ups and clear open automatic
   follow-ups while preserving custom order-linked reminders. Completed automatic follow-ups cannot
   be reopened once their order is completed or cancelled.
+- Settings include an explicit recalculation action for open automatic follow-ups. It deletes only
+  current open automatic follow-ups for active orders and recreates them from the current
+  `default_order_follow_up_days`; completed follow-ups and custom reminders are preserved.
 - See `docs/dashboard_tasks_roadmap.md` for the detailed implementation roadmap.
 
 ## Likely Next Steps
 
 When asked to propose the next logical step, consider this order:
 
-1. Dashboard/UI polish
-   - continue improving dashboard reminder ergonomics after real-world use
-   - keep order-linked reminder creation contextual to the selected order
-   - consider customizable task colors/categories for calendar and dashboard task blocks
+1. Dashboard-centered UX and tab UI refresh
+   - open the app maximized by default
+   - size large workflow dialogs relative to the available screen
+   - keep dashboard quick actions and dashboard order edits in modal dialogs without switching tabs
+   - refresh all tabs with shared softer UI patterns, spacing, action bars, and table polish
 2. Recurring reminder polish
-   - edit future recurring occurrences or the whole recurring series
-   - consider advanced monthly rules such as the first or last day of a month
+   - refine recurrence editing UX after real-world use
+   - consider more advanced recurrence rules only when needed
 3. Product category grouping polish
    - consider grouping the products page by category if filtering is not enough
    - consider category filters in product/variant pickers when order creation needs it

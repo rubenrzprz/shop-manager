@@ -42,6 +42,19 @@ class TaskRecurrenceType(StrEnum):
     MONTHLY = "MONTHLY"
 
 
+class TaskMonthlyRecurrenceRule(StrEnum):
+    FIRST_DAY_OF_MONTH = "FIRST_DAY_OF_MONTH"
+    DAY_OF_MONTH = "DAY_OF_MONTH"
+    SPECIFIC_DAY_OF_MONTH = "SPECIFIC_DAY_OF_MONTH"
+    LAST_DAY_OF_MONTH = "LAST_DAY_OF_MONTH"
+
+
+class TaskSeriesUpdateScope(StrEnum):
+    OCCURRENCE = "OCCURRENCE"
+    FUTURE = "FUTURE"
+    SERIES = "SERIES"
+
+
 class StockMovementType(StrEnum):
     IN = "IN"
     OUT = "OUT"
