@@ -1,7 +1,6 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QHeaderView,
     QHBoxLayout,
     QLabel,
@@ -18,6 +17,14 @@ from app.application.services.suppliers import ListSuppliersService
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialogs.supplier_dialog import SupplierDialog
 from app.ui.localization import t
+from app.ui.page_chrome import (
+    apply_page_chrome,
+    apply_toolbar_chrome,
+    build_selection_action_panel,
+    configure_table_chrome,
+    mark_primary_button,
+    set_selection_actions_enabled,
+)
 
 
 class SuppliersPage(QWidget):
@@ -28,6 +35,7 @@ class SuppliersPage(QWidget):
         self._title_label.setObjectName("pageTitle")
 
         self._create_button = QPushButton()
+        mark_primary_button(self._create_button)
         self._create_button.clicked.connect(self.open_create_dialog)
 
         self._edit_button = QPushButton()
@@ -38,11 +46,8 @@ class SuppliersPage(QWidget):
 
         self._table = QTableWidget()
         self._table.setColumnCount(7)
-        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self._table.verticalHeader().setVisible(False)
-        self._table.setAlternatingRowColors(True)
+        configure_table_chrome(self._table)
+        self._table.itemSelectionChanged.connect(self._sync_action_state)
 
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -54,16 +59,31 @@ class SuppliersPage(QWidget):
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
 
         layout = QVBoxLayout()
+        apply_page_chrome(layout)
         layout.addWidget(self._title_label)
 
         actions_layout = QHBoxLayout()
+        apply_toolbar_chrome(actions_layout)
         actions_layout.addWidget(self._create_button)
-        actions_layout.addWidget(self._edit_button)
         actions_layout.addWidget(self._refresh_button)
         actions_layout.addStretch()
 
+        self._selection_panel_title = QLabel()
+        self._selection_panel_hint = QLabel()
+        self._selection_actions = [self._edit_button]
+        selection_panel = build_selection_action_panel(
+            self._selection_panel_title,
+            self._selection_panel_hint,
+            self._selection_actions,
+        )
+
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(14)
+        content_layout.addWidget(self._table, 1)
+        content_layout.addWidget(selection_panel)
+
         layout.addLayout(actions_layout)
-        layout.addWidget(self._table)
+        layout.addLayout(content_layout, 1)
 
         self.setLayout(layout)
 
@@ -75,6 +95,8 @@ class SuppliersPage(QWidget):
         self._create_button.setText(t("New Supplier"))
         self._edit_button.setText(t("Edit Supplier"))
         self._refresh_button.setText(t("Refresh"))
+        self._selection_panel_title.setText(t("Selected supplier"))
+        self._selection_panel_hint.setText(t("Select a supplier to use these actions."))
         self._table.setHorizontalHeaderLabels(
             [
                 t("Name"),
@@ -119,6 +141,7 @@ class SuppliersPage(QWidget):
         try:
             suppliers = ListSuppliersService(session).execute()
             self._populate_table(suppliers)
+            self._sync_action_state()
         except Exception as exc:
             self._handle_load_suppliers_error(exc)
         finally:
@@ -171,3 +194,9 @@ class SuppliersPage(QWidget):
             return None
 
         return id_item.data(Qt.UserRole)
+
+    def _sync_action_state(self) -> None:
+        set_selection_actions_enabled(
+            self._selection_actions,
+            self._selected_supplier_id() is not None,
+        )

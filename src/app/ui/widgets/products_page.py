@@ -1,7 +1,6 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QComboBox,
     QHeaderView,
     QHBoxLayout,
@@ -28,8 +27,15 @@ from app.ui.dialog_helpers import question
 from app.ui.dialogs.product_activation_variants_dialog import ProductActivationVariantsDialog
 from app.ui.dialogs.product_dialog import ProductDialog
 from app.ui.localization import t
+from app.ui.page_chrome import (
+    apply_page_chrome,
+    apply_toolbar_chrome,
+    build_selection_action_panel,
+    configure_table_chrome,
+    mark_primary_button,
+    set_selection_actions_enabled,
+)
 from app.ui.widgets.category_summary_widget import CategorySummaryWidget, category_summary
-
 
 _UNCATEGORIZED_FILTER = "__uncategorized__"
 
@@ -50,6 +56,7 @@ class ProductsPage(QWidget):
         self._category_filter.currentIndexChanged.connect(self.load_products)
 
         self._create_button = QPushButton()
+        mark_primary_button(self._create_button)
         self._create_button.clicked.connect(self.open_create_dialog)
 
         self._edit_button = QPushButton()
@@ -66,11 +73,8 @@ class ProductsPage(QWidget):
 
         self._table = QTableWidget()
         self._table.setColumnCount(7)
-        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self._table.verticalHeader().setVisible(False)
-        self._table.setAlternatingRowColors(True)
+        configure_table_chrome(self._table)
+        self._table.itemSelectionChanged.connect(self._sync_action_state)
 
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -82,23 +86,41 @@ class ProductsPage(QWidget):
         header.setSectionResizeMode(6, QHeaderView.Stretch)
 
         layout = QVBoxLayout()
+        apply_page_chrome(layout)
         layout.addWidget(self._title_label)
 
         filters_layout = QHBoxLayout()
+        apply_toolbar_chrome(filters_layout)
         filters_layout.addWidget(self._search_input, 1)
         filters_layout.addWidget(self._category_filter)
 
         actions_layout = QHBoxLayout()
+        apply_toolbar_chrome(actions_layout)
         actions_layout.addWidget(self._create_button)
-        actions_layout.addWidget(self._edit_button)
-        actions_layout.addWidget(self._activate_button)
-        actions_layout.addWidget(self._deactivate_button)
         actions_layout.addWidget(self._refresh_button)
         actions_layout.addStretch()
 
+        self._selection_panel_title = QLabel()
+        self._selection_panel_hint = QLabel()
+        self._selection_actions = [
+            self._edit_button,
+            self._activate_button,
+            self._deactivate_button,
+        ]
+        selection_panel = build_selection_action_panel(
+            self._selection_panel_title,
+            self._selection_panel_hint,
+            self._selection_actions,
+        )
+
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(14)
+        content_layout.addWidget(self._table, 1)
+        content_layout.addWidget(selection_panel)
+
         layout.addLayout(filters_layout)
         layout.addLayout(actions_layout)
-        layout.addWidget(self._table)
+        layout.addLayout(content_layout, 1)
 
         self.setLayout(layout)
 
@@ -116,6 +138,8 @@ class ProductsPage(QWidget):
         self._activate_button.setText(t("Activate Product"))
         self._deactivate_button.setText(t("Deactivate Product"))
         self._refresh_button.setText(t("Refresh"))
+        self._selection_panel_title.setText(t("Selected product"))
+        self._selection_panel_hint.setText(t("Select a product to use these actions."))
         self._table.setHorizontalHeaderLabels(
             [
                 t("Name"),
@@ -259,6 +283,7 @@ class ProductsPage(QWidget):
             service = ListProductsService(session)
             products = service.execute(self._product_list_filters())
             self._populate_table(products)
+            self._sync_action_state()
         except Exception as exc:
             self._handle_load_products_error(exc)
         finally:
@@ -377,7 +402,9 @@ class ProductsPage(QWidget):
                 self._table.setItem(row, column, item)
 
             if category_names:
-                self._table.setCellWidget(row, 1, CategorySummaryWidget(category_names, self._table))
+                self._table.setCellWidget(
+                    row, 1, CategorySummaryWidget(category_names, self._table)
+                )
 
     def _refresh_table_text(self) -> None:
         if self._table.rowCount() > 0:
@@ -410,6 +437,12 @@ class ProductsPage(QWidget):
             return False
 
         return bool(status_item.data(Qt.UserRole))
+
+    def _sync_action_state(self) -> None:
+        set_selection_actions_enabled(
+            self._selection_actions,
+            self._selected_product_id() is not None,
+        )
 
     @staticmethod
     def _product_category_names(product: ProductListItem) -> list[str]:

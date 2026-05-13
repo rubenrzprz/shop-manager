@@ -1,6 +1,5 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QHeaderView,
     QHBoxLayout,
     QLabel,
@@ -23,7 +22,16 @@ from app.infrastructure.db.session import SessionLocal
 from app.ui.dialog_helpers import question
 from app.ui.dialogs.order_dialog import OrderDialog
 from app.ui.dialogs.task_dialog import TaskDialog
-from app.ui.localization import order_status_label, t
+from app.ui.localization import format_date, order_status_label, t
+from app.ui.page_chrome import (
+    apply_page_chrome,
+    apply_toolbar_chrome,
+    build_selection_action_panel,
+    configure_table_chrome,
+    mark_danger_button,
+    mark_primary_button,
+    set_selection_actions_enabled,
+)
 
 
 class OrdersPage(QWidget):
@@ -39,6 +47,7 @@ class OrdersPage(QWidget):
         self._title_label.setObjectName("pageTitle")
 
         self._create_button = QPushButton()
+        mark_primary_button(self._create_button)
         self._create_button.clicked.connect(self.open_create_dialog)
 
         self._edit_button = QPushButton()
@@ -51,6 +60,7 @@ class OrdersPage(QWidget):
         self._revert_status_button.clicked.connect(self.revert_selected_order_status)
 
         self._cancel_order_button = QPushButton()
+        mark_danger_button(self._cancel_order_button)
         self._cancel_order_button.clicked.connect(self.cancel_selected_order)
 
         self._recover_order_button = QPushButton()
@@ -64,11 +74,8 @@ class OrdersPage(QWidget):
 
         self._table = QTableWidget()
         self._table.setColumnCount(7)
-        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self._table.verticalHeader().setVisible(False)
-        self._table.setAlternatingRowColors(True)
+        configure_table_chrome(self._table)
+        self._table.itemSelectionChanged.connect(self._sync_action_state)
 
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
@@ -80,21 +87,38 @@ class OrdersPage(QWidget):
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
 
         layout = QVBoxLayout()
+        apply_page_chrome(layout)
         layout.addWidget(self._title_label)
 
         actions_layout = QHBoxLayout()
+        apply_toolbar_chrome(actions_layout)
         actions_layout.addWidget(self._create_button)
-        actions_layout.addWidget(self._edit_button)
-        actions_layout.addWidget(self._advance_status_button)
-        actions_layout.addWidget(self._revert_status_button)
-        actions_layout.addWidget(self._cancel_order_button)
-        actions_layout.addWidget(self._recover_order_button)
-        actions_layout.addWidget(self._reminder_button)
         actions_layout.addWidget(self._refresh_button)
         actions_layout.addStretch()
 
+        self._selection_panel_title = QLabel()
+        self._selection_panel_hint = QLabel()
+        self._selection_actions = [
+            self._edit_button,
+            self._reminder_button,
+            self._advance_status_button,
+            self._revert_status_button,
+            self._recover_order_button,
+            self._cancel_order_button,
+        ]
+        selection_panel = build_selection_action_panel(
+            self._selection_panel_title,
+            self._selection_panel_hint,
+            self._selection_actions,
+        )
+
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(14)
+        content_layout.addWidget(self._table, 1)
+        content_layout.addWidget(selection_panel)
+
         layout.addLayout(actions_layout)
-        layout.addWidget(self._table)
+        layout.addLayout(content_layout, 1)
         self.setLayout(layout)
 
         self.load_orders()
@@ -109,6 +133,8 @@ class OrdersPage(QWidget):
         self._recover_order_button.setText(t("Recover Order"))
         self._reminder_button.setText(t("New Reminder"))
         self._refresh_button.setText(t("Refresh"))
+        self._selection_panel_title.setText(t("Selected order"))
+        self._selection_panel_hint.setText(t("Select an order to use these actions."))
         self._table.setHorizontalHeaderLabels(
             [
                 t("Order #"),
@@ -347,6 +373,7 @@ class OrdersPage(QWidget):
         try:
             orders = ListOrdersService(session).execute()
             self._populate_table(orders)
+            self._sync_action_state()
         except Exception as exc:
             self._handle_load_orders_error(exc)
         finally:
@@ -369,8 +396,8 @@ class OrdersPage(QWidget):
                 QTableWidgetItem(order.order_number),
                 QTableWidgetItem(order.customer_name),
                 QTableWidgetItem(order_status_label(order.status)),
-                QTableWidgetItem(order.order_date.isoformat()),
-                QTableWidgetItem(order.deadline.isoformat() if order.deadline else ""),
+                QTableWidgetItem(format_date(order.order_date)),
+                QTableWidgetItem(format_date(order.deadline) if order.deadline else ""),
                 QTableWidgetItem(str(len(order.lines))),
                 QTableWidgetItem(f"{order.total_amount:.2f}"),
             ]
@@ -396,3 +423,9 @@ class OrdersPage(QWidget):
         order_id = id_item.data(Qt.UserRole)
 
         return self._orders_by_id.get(order_id)
+
+    def _sync_action_state(self) -> None:
+        set_selection_actions_enabled(
+            self._selection_actions,
+            self._selected_order() is not None,
+        )

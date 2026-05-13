@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -45,6 +46,7 @@ from app.ui.dialog_helpers import translate_button_box
 from app.ui.dialogs.customer_picker_dialog import CustomerPickerDialog
 from app.ui.dialogs.product_variant_picker_dialog import ProductVariantPickerDialog
 from app.ui.localization import t
+from app.ui.window_sizing import resize_to_available_screen
 
 
 class OrderDialog(QDialog):
@@ -63,7 +65,13 @@ class OrderDialog(QDialog):
         self._edit_capability = OrderEditCapability.FULL
 
         self.setWindowTitle(t("Edit Order") if self._order_id is not None else t("Create Order"))
-        self.resize(820, 640)
+        resize_to_available_screen(
+            self,
+            width_ratio=0.86,
+            height_ratio=0.74,
+            min_width=920,
+            min_height=560,
+        )
 
         self._customer_display = QLineEdit()
         self._customer_display.setReadOnly(True)
@@ -139,7 +147,7 @@ class OrderDialog(QDialog):
         self._lines_table.verticalHeader().setVisible(False)
         self._lines_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self._lines_table.setAlternatingRowColors(True)
-        self._lines_table.setMinimumHeight(170)
+        self._lines_table.setMinimumHeight(120)
 
         lines_header = self._lines_table.horizontalHeader()
         lines_header.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -176,21 +184,36 @@ class OrderDialog(QDialog):
         self._summary_widget.setLayout(summary_layout)
 
         self._notes_input = QPlainTextEdit()
-        self._notes_input.setFixedHeight(90)
+        self._notes_input.setFixedHeight(68)
 
-        form = QFormLayout()
-        form.addRow(t("Customer"), customer_layout)
-        form.addRow(t("Order date"), self._order_date_input)
-        form.addRow(t("Deadline"), deadline_layout)
-        form.addRow(QLabel(f"<b>{t('Add line')}</b>"))
-        form.addRow(t("Product variant"), self._line_composer)
-        form.addRow(QLabel(f"<b>{t('Lines')}</b>"))
-        form.addRow(self._lines_table)
-        form.addRow(t("Discount type"), self._discount_type_input)
-        form.addRow(t("Discount value"), self._discount_value_input)
-        form.addRow(QLabel(f"<b>{t('Total preview')}</b>"))
-        form.addRow(self._summary_widget)
-        form.addRow(t("Notes"), self._notes_input)
+        details_form = QFormLayout()
+        details_form.addRow(t("Customer"), customer_layout)
+        details_form.addRow(t("Order date"), self._order_date_input)
+        details_form.addRow(t("Deadline"), deadline_layout)
+        details_form.addRow(t("Notes"), self._notes_input)
+        details_tab = QWidget()
+        details_tab.setLayout(details_form)
+
+        lines_layout = QVBoxLayout()
+        lines_layout.addWidget(QLabel(f"<b>{t('Add line')}</b>"))
+        lines_layout.addWidget(self._line_composer)
+        lines_layout.addWidget(QLabel(f"<b>{t('Lines')}</b>"))
+        lines_layout.addWidget(self._lines_table, 1)
+        lines_tab = QWidget()
+        lines_tab.setLayout(lines_layout)
+
+        totals_form = QFormLayout()
+        totals_form.addRow(t("Discount type"), self._discount_type_input)
+        totals_form.addRow(t("Discount value"), self._discount_value_input)
+        totals_form.addRow(QLabel(f"<b>{t('Total preview')}</b>"))
+        totals_form.addRow(self._summary_widget)
+        totals_tab = QWidget()
+        totals_tab.setLayout(totals_form)
+
+        self._tabs = QTabWidget()
+        self._tabs.addTab(details_tab, t("Order Details"))
+        self._tabs.addTab(lines_tab, t("Lines"))
+        self._tabs.addTab(totals_tab, t("Totals"))
 
         self._buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         translate_button_box(self._buttons)
@@ -198,7 +221,7 @@ class OrderDialog(QDialog):
         self._buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout()
-        layout.addLayout(form)
+        layout.addWidget(self._tabs, 1)
         layout.addWidget(self._buttons)
         self.setLayout(layout)
 

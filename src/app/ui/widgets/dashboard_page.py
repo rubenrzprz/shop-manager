@@ -32,8 +32,8 @@ from app.domain.enums import OrderStatus
 from app.infrastructure.db.session import SessionLocal
 from app.ui.date_edit import AppDateEdit
 from app.ui.dialogs.task_dialog import TaskDialog
-from app.ui.localization import order_status_label, t
-from app.ui.task_colors import task_background
+from app.ui.localization import format_date, order_status_label, t
+from app.ui.widgets.task_card import TaskCard, task_card_state
 
 
 class DashboardPage(QWidget):
@@ -208,6 +208,7 @@ class DashboardPage(QWidget):
         self._recent_orders_label.setText(t("Recent Orders"))
 
         self._tasks_title_label.setText(t("Daily Tasks"))
+        self._selected_date_input.refresh_display_format()
         self._previous_day_button.setText("<")
         self._next_day_button.setText(">")
         self._today_button.setText(t("Today"))
@@ -338,14 +339,16 @@ class DashboardPage(QWidget):
         calendar.clicked.connect(
             lambda selected_date: self._set_date_from_calendar(menu, selected_date)
         )
-        menu.exec(self._selected_date_button.mapToGlobal(self._selected_date_button.rect().bottomLeft()))
+        menu.exec(
+            self._selected_date_button.mapToGlobal(self._selected_date_button.rect().bottomLeft())
+        )
 
     def _set_date_from_calendar(self, menu: QMenu, selected_date: QDate) -> None:
         self._selected_date_input.setDate(selected_date)
         menu.close()
 
     def _sync_selected_date_button(self) -> None:
-        self._selected_date_button.setText(self._selected_date().isoformat())
+        self._selected_date_button.setText(format_date(self._selected_date()))
 
     def _section_title(self) -> QLabel:
         label = QLabel()
@@ -414,9 +417,9 @@ class DashboardPage(QWidget):
         header_layout.addWidget(badge, 0, Qt.AlignTop)
         detail_parts = [order_status_label(order.status), f"{t('Total')}: {order.total_amount}"]
         if include_deadline and order.deadline is not None:
-            detail_parts.insert(0, f"{t('Deadline')}: {order.deadline.isoformat()}")
+            detail_parts.insert(0, f"{t('Deadline')}: {format_date(order.deadline)}")
         else:
-            detail_parts.insert(0, f"{t('Order date')}: {order.order_date.isoformat()}")
+            detail_parts.insert(0, f"{t('Order date')}: {format_date(order.order_date)}")
         detail = QLabel("  ·  ".join(detail_parts))
         self._register_order_click_target(detail, order.id)
         detail.setWordWrap(True)
@@ -471,50 +474,18 @@ class DashboardPage(QWidget):
         action_label: str,
         action,
         section: str,
-    ) -> QFrame:
-        frame = QFrame()
-        background, border, icon = self._task_row_treatment(task, section)
-        frame.setObjectName("taskRow")
-        self._register_task_click_target(frame, task)
-        frame.setStyleSheet(
-            f"QFrame#taskRow {{ background: {background}; border: 1px solid {border}; "
-            "border-radius: 16px; }}"
-            "QFrame#taskRow QLabel { background: transparent; }"
+    ) -> TaskCard:
+        state = task_card_state(task, section)
+        return TaskCard(
+            task=task,
+            title=self._task_title(task),
+            description=self._task_description(task),
+            state=state,
+            action_label=action_label,
+            action_icon="↶" if state == "completed" else "✓",
+            action=action,
+            register_click_target=self._register_task_click_target,
         )
-        icon_label = QLabel(icon)
-        self._register_task_click_target(icon_label, task)
-        icon_label.setFixedWidth(24)
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet("font-size: 18px;")
-        title_label = QLabel(self._task_title(task))
-        self._register_task_click_target(title_label, task)
-        title_label.setWordWrap(True)
-        title_label.setStyleSheet("font-weight: 650; color: #111827;")
-        meta_label = QLabel(self._task_meta(task))
-        self._register_task_click_target(meta_label, task)
-        meta_label.setWordWrap(True)
-        meta_label.setStyleSheet("color: #6b7280;")
-        button = QPushButton(action_label)
-        button.setMinimumHeight(30)
-        button.setStyleSheet(
-            "QPushButton { background: #f9fafb; border: 1px solid #e5e7eb; "
-            "border-radius: 10px; padding: 4px 8px; }"
-            "QPushButton:hover { background: #f3f4f6; }"
-        )
-        button.clicked.connect(lambda _checked=False, task_id=task.id: action(task_id))
-        text_layout = QVBoxLayout()
-        text_layout.setContentsMargins(0, 0, 0, 0)
-        text_layout.setSpacing(3)
-        text_layout.addWidget(title_label)
-        text_layout.addWidget(meta_label)
-        row = QHBoxLayout()
-        row.setContentsMargins(12, 10, 12, 10)
-        row.setSpacing(10)
-        row.addWidget(icon_label, 0, Qt.AlignVCenter)
-        row.addLayout(text_layout, 1)
-        row.addWidget(button)
-        frame.setLayout(row)
-        return frame
 
     def _register_task_click_target(self, widget: QWidget, task: TaskListItem) -> None:
         if task.is_auto_order_follow_up:
@@ -533,36 +504,20 @@ class DashboardPage(QWidget):
         return f"{order_prefix}{task.title}"
 
     @staticmethod
-    def _task_meta(task: TaskListItem) -> str:
-        details = [f"{t('Due date')}: {task.due_date.isoformat()}"]
+    def _task_description(task: TaskListItem) -> str | None:
         if task.notes:
-            notes = t(task.notes) if task.is_auto_order_follow_up else task.notes
-            details.append(notes)
+            return t(task.notes) if task.is_auto_order_follow_up else task.notes
 
-        return " · ".join(details)
+        return None
 
     @classmethod
     def _task_label(cls, task: TaskListItem) -> str:
         title = cls._task_title(task)
         if task.notes:
             notes = t(task.notes) if task.is_auto_order_follow_up else task.notes
-            return f"{task.due_date.isoformat()} - {title} ({notes})"
+            return f"{format_date(task.due_date)} - {title} ({notes})"
 
-        return f"{task.due_date.isoformat()} - {title}"
-
-    @staticmethod
-    def _task_row_treatment(task: TaskListItem, section: str) -> tuple[str, str, str]:
-        icon = "!"
-        if section == "completed":
-            icon = "✓"
-        elif section != "overdue":
-            icon = "○"
-        if section == "overdue":
-            icon = "!"
-        if task.is_auto_order_follow_up:
-            return "#ede9fe", "#7c3aed", icon
-
-        return task_background(task.color_hex), task.color_hex, icon
+        return f"{format_date(task.due_date)} - {title}"
 
     @staticmethod
     def _deadline_distance_label(deadline: date) -> str:

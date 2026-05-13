@@ -155,8 +155,12 @@ The project currently has these completed vertical slices:
 
 - Dashboard Shell v1
   - dashboard is the first application tab
-  - quick action buttons open create product/supplier/customer/order flows and settings
+  - dashboard quick action buttons can open create product/supplier/customer/order flows without
+    leaving the dashboard; navigation shortcuts still switch to their tabs
+  - dashboard order activity opens order editing modally without leaving the dashboard
   - polished dashboard layout uses shortcut chips, an orders overview column, and a daily tasks rail
+  - management tabs use shared softer page chrome, table styling, and primary action treatment
+  - completed tasks render with a completed visual treatment in dashboard and calendar
   - orders overview shows active order counts, due-soon orders, and recent orders
   - daily task sections show overdue, pending today, and completed today tasks
   - create standalone one-off tasks
@@ -235,6 +239,7 @@ The project currently has these completed vertical slices:
   be newly assigned to products.
 - Supplier/customer picker dialogs use one practical search box, not many field-specific filters.
 - Multi-line order creation uses a compact line composer plus an added-lines table.
+- Order create/edit uses a tabbed dialog for details, lines, and totals.
 - Create order dialog previews subtotal, discount, and total before save; persisted totals remain
   service-calculated.
 - Active order editing supports updating customer/date/deadline/notes/discount/lines and
@@ -249,6 +254,8 @@ The project currently has these completed vertical slices:
 - `app_language` is a typed setting. The UI currently supports English (`en`) and Spanish (`es`).
 - UI translation uses a lightweight dictionary helper keyed by source English text. Keep new UI text
   routed through the helper instead of hardcoding final labels directly in widgets.
+- User-visible dates should use locale-aware display helpers: ISO-like `yyyy-MM-dd` in English and
+  `dd/MM/yyyy` in Spanish.
 - Service validation messages mostly remain final English strings for now. If deeper localization is
   needed, introduce message codes before translating application-layer errors broadly.
 - Status-aware editing rules should be practical rather than forcing unnecessary status churn:
@@ -272,6 +279,10 @@ The project currently has these completed vertical slices:
 - `CANCELLED` can be recovered to `DRAFT` as an explicit accidental-cancellation recovery action.
 - A fuller order workspace redesign is a future UI step: group customer/date fields, line table,
   line composer, totals/discount summary, and notes around order review/editing workflows.
+- The desktop app opens maximized by default, and larger workflow dialogs should size themselves
+  against the available screen rather than using small fixed dimensions.
+- Keep broad UI polish centralized through shared stylesheet/page chrome helpers before doing
+  page-specific redesigns.
 - Stock movements from orders are deferred.
 - Shipment workflows are deferred.
 

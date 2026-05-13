@@ -1,3 +1,4 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMainWindow, QTabWidget
 
 from app.application.services.settings import ApplicationSettingsService
@@ -20,6 +21,7 @@ class MainWindow(QMainWindow):
         self._load_language()
         self.setWindowTitle(t("Shop Manager"))
         self.resize(1000, 600)
+        self.setWindowState(self.windowState() | Qt.WindowMaximized)
 
         self._tabs = QTabWidget()
         self._dashboard_page = DashboardPage()
@@ -73,25 +75,27 @@ class MainWindow(QMainWindow):
         self._tabs.setTabText(7, t("Settings"))
 
     def _run_dashboard_action(self, action: str) -> None:
-        actions = {
-            "calendar": (1, None),
-            "new_product": (2, self._products_page.open_create_dialog),
-            "new_supplier": (4, self._suppliers_page.open_create_dialog),
-            "new_customer": (5, self._customers_page.open_create_dialog),
-            "new_order": (6, self._orders_page.open_create_dialog),
-            "settings": (7, None),
+        modal_actions = {
+            "new_product": self._products_page.open_create_dialog,
+            "new_supplier": self._suppliers_page.open_create_dialog,
+            "new_customer": self._customers_page.open_create_dialog,
+            "new_order": self._orders_page.open_create_dialog,
         }
-        action_config = actions.get(action)
-        if action_config is None:
+        modal_action = modal_actions.get(action)
+        if modal_action is not None:
+            modal_action()
             return
 
-        tab_index, callback = action_config
+        tab_actions = {
+            "calendar": 1,
+            "settings": 7,
+        }
+        tab_index = tab_actions.get(action)
+        if tab_index is None:
+            return
         self._tabs.setCurrentIndex(tab_index)
-        if callback is not None:
-            callback()
 
     def _open_order_from_dashboard(self, order_id: int) -> None:
-        self._tabs.setCurrentIndex(6)
         self._orders_page.open_order_for_edit(order_id)
 
     def _load_language(self) -> None:

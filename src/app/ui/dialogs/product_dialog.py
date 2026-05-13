@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -49,6 +50,7 @@ from app.ui.dialog_helpers import question, translate_button_box
 from app.ui.dialogs.product_variant_dialog import ProductVariantDialog
 from app.ui.dialogs.supplier_picker_dialog import SupplierPickerDialog
 from app.ui.localization import t
+from app.ui.window_sizing import resize_to_available_screen
 
 
 @dataclass
@@ -83,7 +85,13 @@ class ProductDialog(QDialog):
         self.setWindowTitle(
             t("Edit Product") if self._product_id is not None else t("Create Product")
         )
-        self.resize(760, 520)
+        resize_to_available_screen(
+            self,
+            width_ratio=0.72,
+            height_ratio=0.78,
+            min_width=820,
+            min_height=560,
+        )
 
         self._name_input = QLineEdit()
         self._supplier_display = QLineEdit()
@@ -156,17 +164,7 @@ class ProductDialog(QDialog):
         variants_layout = QVBoxLayout()
         self._variants_table = QTableWidget()
         self._variants_table.setColumnCount(7)
-        self._variants_table.setHorizontalHeaderLabels(
-            [
-                t("SKU"),
-                t("Variant"),
-                t("Size"),
-                t("Color"),
-                t("Price"),
-                t("Status"),
-                t("Default"),
-            ]
-        )
+        self._set_variants_table_headers()
         self._variants_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._variants_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._variants_table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -174,6 +172,16 @@ class ProductDialog(QDialog):
         self._variants_table.setAlternatingRowColors(True)
         self._variants_table.doubleClicked.connect(self._edit_selected_variant)
         self._variants_table.setMinimumHeight(260)
+        self._variants_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        variants_header = self._variants_table.horizontalHeader()
+        variants_header.setSectionResizeMode(0, QHeaderView.Stretch)
+        variants_header.setSectionResizeMode(1, QHeaderView.Stretch)
+        variants_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        variants_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        variants_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        variants_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        variants_header.setSectionResizeMode(6, QHeaderView.Fixed)
+        variants_header.resizeSection(6, 52)
 
         self._add_variant_button = QPushButton(t("Add Variant"))
         self._add_variant_button.clicked.connect(self._add_variant)
@@ -191,7 +199,7 @@ class ProductDialog(QDialog):
         variant_actions_layout.addWidget(self._deactivate_variant_button)
         variant_actions_layout.addStretch()
 
-        variants_layout.addWidget(self._variants_table)
+        variants_layout.addWidget(self._variants_table, 1)
         variants_layout.addLayout(variant_actions_layout)
         variants_tab.setLayout(variants_layout)
 
@@ -397,6 +405,7 @@ class ProductDialog(QDialog):
                 QTableWidgetItem(row["status"]),
                 QTableWidgetItem("✓" if row["default"] else ""),
             ]
+            items[6].setTextAlignment(Qt.AlignCenter)
 
             for item in items:
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
@@ -412,6 +421,21 @@ class ProductDialog(QDialog):
 
             for column, item in enumerate(items):
                 self._variants_table.setItem(row_index, column, item)
+
+    def _set_variants_table_headers(self) -> None:
+        header_labels = [
+            t("SKU"),
+            t("Variant"),
+            t("Size"),
+            t("Color"),
+            t("Price"),
+            t("Status"),
+            "✓",
+        ]
+        self._variants_table.setHorizontalHeaderLabels(header_labels)
+        default_header = self._variants_table.horizontalHeaderItem(6)
+        if default_header is not None:
+            default_header.setToolTip(t("Default"))
 
     def _load_category_options(self) -> None:
         try:
@@ -613,7 +637,9 @@ class ProductDialog(QDialog):
 
         variant = self._variant_drafts[variant_index]
         if variant.id is None:
-            dialog = ProductVariantDialog(self, create_variant=self._create_input_from_draft(variant))
+            dialog = ProductVariantDialog(
+                self, create_variant=self._create_input_from_draft(variant)
+            )
             if not dialog.exec() or not isinstance(dialog.variant_input, CreateProductVariantInput):
                 return
 

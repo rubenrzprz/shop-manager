@@ -24,6 +24,7 @@ from app.domain.enums import OrderStatus
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialog_helpers import question
 from app.ui.localization import SUPPORTED_LANGUAGES, order_status_label, set_language, t
+from app.ui.page_chrome import apply_page_chrome, mark_primary_button
 
 
 class SettingsPage(QWidget):
@@ -59,9 +60,7 @@ class SettingsPage(QWidget):
         self._default_order_follow_up_description = QLabel()
         self._default_order_follow_up_description.setWordWrap(True)
         self._recalculate_follow_ups_button = QPushButton()
-        self._recalculate_follow_ups_button.clicked.connect(
-            self.recalculate_order_follow_ups
-        )
+        self._recalculate_follow_ups_button.clicked.connect(self.recalculate_order_follow_ups)
         self._strict_order_workflow_checkbox = QCheckBox()
         self._strict_order_workflow_description = QLabel()
         self._strict_order_workflow_description.setWordWrap(True)
@@ -89,6 +88,7 @@ class SettingsPage(QWidget):
         self._order_status_group.setLayout(order_status_layout)
 
         self._save_button = QPushButton()
+        mark_primary_button(self._save_button)
         self._save_button.clicked.connect(self.save_settings)
 
         self._form = QFormLayout()
@@ -103,6 +103,7 @@ class SettingsPage(QWidget):
         )
 
         layout = QVBoxLayout()
+        apply_page_chrome(layout)
         layout.addWidget(self._title_label)
         layout.addLayout(self._form)
         layout.addWidget(self._task_generation_horizon_description)
@@ -244,9 +245,7 @@ class SettingsPage(QWidget):
             QMessageBox.information(
                 self,
                 t("Order follow-ups recalculated"),
-                t("{count} order follow-ups recalculated.").format(
-                    count=recalculated_count
-                ),
+                t("{count} order follow-ups recalculated.").format(count=recalculated_count),
             )
         except Exception as exc:
             session.rollback()

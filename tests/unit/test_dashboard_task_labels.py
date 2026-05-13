@@ -23,7 +23,7 @@ def test_dashboard_task_label_does_not_translate_user_entered_notes():
     finally:
         set_language("en")
 
-    assert label == "2026-05-11 - Call customer (Settings)"
+    assert label == "11/05/2026 - Call customer (Settings)"
 
 
 def test_dashboard_task_label_translates_system_auto_follow_up_notes():
@@ -45,7 +45,7 @@ def test_dashboard_task_label_translates_system_auto_follow_up_notes():
         set_language("en")
 
     assert label == (
-        "2026-05-11 - [ORD-000001] Seguimiento "
+        "11/05/2026 - [ORD-000001] Seguimiento "
         "(Recordatorio automático de seguimiento de pedido activo.)"
     )
 

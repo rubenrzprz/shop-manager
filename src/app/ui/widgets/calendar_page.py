@@ -26,8 +26,9 @@ from app.application.services.tasks import (
 )
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialogs.task_dialog import TaskDialog
-from app.ui.localization import t
+from app.ui.localization import format_date, t
 from app.ui.task_colors import task_background
+from app.ui.widgets.task_card import TaskCard, task_card_state
 
 
 class CalendarPage(QWidget):
@@ -71,8 +72,16 @@ class CalendarPage(QWidget):
         self._selected_day_group = QGroupBox()
         self._selected_day_group.setMinimumWidth(340)
         self._selected_day_group.setMaximumWidth(460)
+        self._selected_day_group.setStyleSheet(
+            "QGroupBox { background: #ffffff; border: 1px solid #e1e7ef; "
+            "border-radius: 16px; padding: 14px; margin-top: 12px; font-weight: 700; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 4px; }"
+        )
         self._pending_label = QLabel()
         self._completed_label = QLabel()
+        section_style = "font-size: 13px; font-weight: 700; color: #374151; margin-top: 4px;"
+        self._pending_label.setStyleSheet(section_style)
+        self._completed_label.setStyleSheet(section_style)
         self._pending_tasks_layout = QVBoxLayout()
         self._completed_tasks_layout = QVBoxLayout()
 
@@ -276,15 +285,9 @@ class CalendarPage(QWidget):
                 self._selected_day,
             )
             selected_day_tasks = task_days[0].tasks if task_days else []
-            pending_tasks = [
-                task for task in selected_day_tasks if task.completed_at is None
-            ]
-            completed_tasks = [
-                task for task in selected_day_tasks if task.completed_at is not None
-            ]
-            self._selected_day_group.setTitle(
-                f"{t('Tasks for')} {self._selected_day.isoformat()}"
-            )
+            pending_tasks = [task for task in selected_day_tasks if task.completed_at is None]
+            completed_tasks = [task for task in selected_day_tasks if task.completed_at is not None]
+            self._selected_day_group.setTitle(f"{t('Tasks for')} {format_date(self._selected_day)}")
             self._pending_label.setText(t("Pending tasks"))
             self._completed_label.setText(t("Completed tasks"))
             self._populate_task_section(
@@ -322,16 +325,19 @@ class CalendarPage(QWidget):
             return
 
         for task in tasks:
-            row = QHBoxLayout()
-            label = QLabel(self._task_detail_label(task))
-            self._register_task_click_target(label, task)
-            label.setWordWrap(True)
-            label.setStyleSheet(self._task_detail_style(task))
-            button = QPushButton(action_label)
-            button.clicked.connect(lambda _checked=False, task_id=task.id: action(task_id))
-            row.addWidget(label, 1)
-            row.addWidget(button)
-            layout.addLayout(row)
+            state = task_card_state(task)
+            layout.addWidget(
+                TaskCard(
+                    task=task,
+                    title=self._task_title(task),
+                    description=self._task_description(task),
+                    state=state,
+                    action_label=action_label,
+                    action_icon="↶" if state == "completed" else "✓",
+                    action=action,
+                    register_click_target=self._register_task_click_target,
+                )
+            )
 
     def _register_task_click_target(self, widget: QWidget, task: TaskListItem) -> None:
         if task.is_auto_order_follow_up:
@@ -433,18 +439,25 @@ class CalendarPage(QWidget):
     @classmethod
     def _task_detail_label(cls, task: TaskListItem) -> str:
         title = cls._task_title(task)
-        if task.notes:
-            notes = t(task.notes) if task.is_auto_order_follow_up else task.notes
-            return f"{title} ({notes})"
+        description = cls._task_description(task)
+        if description:
+            return f"{title} ({description})"
 
         return title
+
+    @staticmethod
+    def _task_description(task: TaskListItem) -> str | None:
+        if task.notes:
+            return t(task.notes) if task.is_auto_order_follow_up else task.notes
+
+        return None
 
     @staticmethod
     def _task_block_style(task: TaskListItem) -> str:
         if task.completed_at is not None:
             return (
-                "background: #e5e7eb; color: #374151; border-left: 4px solid #6b7280; "
-                "border-radius: 3px; padding: 1px 4px;"
+                "background: #ecfdf3; color: #37513d; border-left: 4px solid #86efac; "
+                "border-radius: 3px; padding: 1px 4px; text-decoration: line-through;"
             )
         if task.is_auto_order_follow_up:
             return (
@@ -455,7 +468,3 @@ class CalendarPage(QWidget):
             f"background: {task_background(task.color_hex)}; color: #111827; "
             f"border-left: 4px solid {task.color_hex}; border-radius: 3px; padding: 1px 4px;"
         )
-
-    @staticmethod
-    def _task_detail_style(task: TaskListItem) -> str:
-        return f"{CalendarPage._task_block_style(task)} min-height: 24px;"

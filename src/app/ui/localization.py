@@ -26,6 +26,20 @@ def order_status_label(status: OrderStatus) -> str:
     return t(status.value.title().replace("_", " "))
 
 
+def format_date(value) -> str:
+    if _current_language == "es":
+        return value.strftime("%d/%m/%Y")
+
+    return value.isoformat()
+
+
+def qt_date_format() -> str:
+    if _current_language == "es":
+        return "dd/MM/yyyy"
+
+    return "yyyy-MM-dd"
+
+
 _TRANSLATIONS = {
     "es": {
         "Shop Manager": "Gestor de tienda",
@@ -314,8 +328,27 @@ _TRANSLATIONS = {
         "Save": "Guardar",
         "Cancel": "Cancelar",
         "OK": "Aceptar",
+        "Edit": "Editar",
         "No variants": "Sin variantes",
         "Default": "Predeterminada",
+        "Selected product": "Producto seleccionado",
+        "Selected supplier": "Proveedor seleccionado",
+        "Selected customer": "Cliente seleccionado",
+        "Selected category": "Categoría seleccionada",
+        "Selected order": "Pedido seleccionado",
+        "Select a product to use these actions.": (
+            "Selecciona un producto para usar estas acciones."
+        ),
+        "Select a supplier to use these actions.": (
+            "Selecciona un proveedor para usar estas acciones."
+        ),
+        "Select a customer to use these actions.": (
+            "Selecciona un cliente para usar estas acciones."
+        ),
+        "Select a category to use these actions.": (
+            "Selecciona una categoría para usar estas acciones."
+        ),
+        "Select an order to use these actions.": ("Selecciona un pedido para usar estas acciones."),
         "Draft": "Borrador",
         "Confirmed": "Confirmado",
         "In Progress": "En curso",
@@ -422,6 +455,8 @@ _TRANSLATIONS = {
         "Could not update order status": "No se pudo actualizar el estado del pedido",
         "Could not load orders": "No se pudieron cargar los pedidos",
         "Set deadline": "Definir fecha límite",
+        "Order Details": "Detalles del pedido",
+        "Totals": "Totales",
         "Enter price": "Introduce precio",
         "Missing product variant": "Falta variante de producto",
         "Missing customer": "Falta cliente",
@@ -464,9 +499,7 @@ _TRANSLATIONS = {
             "los recordatorios personalizados no cambiarán."
         ),
         "Order follow-ups recalculated": "Seguimientos de pedidos recalculados",
-        "{count} order follow-ups recalculated.": (
-            "{count} seguimientos de pedidos recalculados."
-        ),
+        "{count} order follow-ups recalculated.": ("{count} seguimientos de pedidos recalculados."),
         "Default order follow-up days must be between 1 and 365.": (
             "Los días de seguimiento predeterminado de pedidos deben estar entre 1 y 365."
         ),
