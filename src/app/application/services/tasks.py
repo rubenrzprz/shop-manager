@@ -166,8 +166,8 @@ class UpdateTaskService:
         series.monthly_day = data.monthly_day
         series.starts_on = data.due_date
         series.ends_on = data.ends_on
-        GenerateRecurringTasksService(self._session).execute(date.today())
-        return self._first_generated_occurrence(series.id, max(date.today(), data.due_date))
+        GenerateRecurringTasksService(self._session).execute(data.due_date)
+        return self._first_generated_occurrence(series.id, data.due_date)
 
     def _update_whole_series(self, task: Task, data: UpdateTaskInput) -> Task:
         series = task.series
@@ -194,8 +194,8 @@ class UpdateTaskService:
         series.monthly_day = data.monthly_day
         series.starts_on = data.due_date
         series.ends_on = data.ends_on
-        GenerateRecurringTasksService(self._session).execute(date.today())
-        return self._first_generated_occurrence(series.id, max(date.today(), data.due_date))
+        GenerateRecurringTasksService(self._session).execute(data.due_date)
+        return self._first_generated_occurrence(series.id, data.due_date)
 
     def _update_existing_occurrence_snapshots(
         self,
