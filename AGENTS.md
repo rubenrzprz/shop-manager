@@ -238,13 +238,14 @@ The project currently has these completed vertical slices:
 - Inactive categories can remain assigned to existing products, but inactive categories should not
   be newly assigned to products.
 - Supplier/customer picker dialogs use one practical search box, not many field-specific filters.
-- Multi-line order creation uses a compact line composer plus an added-lines table.
-- Order create/edit uses a tabbed dialog for details, lines, and totals.
+- Multi-line order creation uses a compact line composer plus an added-lines table in a single
+  order workspace with details, lines, and totals visible together.
 - Create order dialog previews subtotal, discount, and total before save; persisted totals remain
   service-calculated.
 - Active order editing supports updating customer/date/deadline/notes/discount/lines and
   recalculates totals in the application layer.
-- Order line editing in the dialog is currently remove-and-readd; inline line editing is deferred.
+- Order line editing in the dialog loads a selected line back into the composer so quantity,
+  unit price, variant, and line notes can be adjusted before saving.
 - `strict_order_workflow_enabled` defaults to `False`; while disabled, active statuses (`DRAFT`,
   `CONFIRMED`, `IN_PROGRESS`, `READY`) are editable with the same rules.
 - Strict order workflow uses status-specific editing rules instead of draft-like behavior.
