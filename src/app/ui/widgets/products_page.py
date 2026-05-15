@@ -72,7 +72,7 @@ class ProductsPage(QWidget):
         self._refresh_button.clicked.connect(self.refresh_products)
 
         self._table = QTableWidget()
-        self._table.setColumnCount(7)
+        self._table.setColumnCount(6)
         configure_table_chrome(self._table)
         self._table.itemSelectionChanged.connect(self._sync_action_state)
 
@@ -82,8 +82,7 @@ class ProductsPage(QWidget):
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(6, QHeaderView.Stretch)
+        header.setSectionResizeMode(5, QHeaderView.Stretch)
 
         layout = QVBoxLayout()
         apply_page_chrome(layout)
@@ -146,7 +145,6 @@ class ProductsPage(QWidget):
                 t("Categories"),
                 t("Supplier"),
                 t("Base Price"),
-                t("Track Stock"),
                 t("Status"),
                 t("Variant Summary"),
             ]
@@ -375,7 +373,6 @@ class ProductsPage(QWidget):
             supplier_text = product.supplier_name or ""
             category_names = self._product_category_names(product)
             categories_text = "" if category_names else self._category_summary(category_names)
-            track_stock_text = t("Yes") if product.track_stock else t("No")
             status_text = t("Active") if product.is_active else t("Inactive")
             variant_summary_text = self._build_variant_summary(product)
 
@@ -384,7 +381,6 @@ class ProductsPage(QWidget):
                 QTableWidgetItem(categories_text),
                 QTableWidgetItem(supplier_text),
                 QTableWidgetItem(base_price_text),
-                QTableWidgetItem(track_stock_text),
                 QTableWidgetItem(status_text),
                 QTableWidgetItem(variant_summary_text),
             ]
@@ -396,7 +392,7 @@ class ProductsPage(QWidget):
                     item.setBackground(QColor("#f2f2f2"))
 
             items[0].setData(Qt.UserRole, product.id)
-            items[5].setData(Qt.UserRole, product.is_active)
+            items[4].setData(Qt.UserRole, product.is_active)
 
             for column, item in enumerate(items):
                 self._table.setItem(row, column, item)
@@ -431,7 +427,7 @@ class ProductsPage(QWidget):
             return False
 
         row = selected_items[0].row()
-        status_item = self._table.item(row, 5)
+        status_item = self._table.item(row, 4)
 
         if status_item is None:
             return False

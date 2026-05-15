@@ -5,22 +5,53 @@ QWidget {
 }
 
 QMainWindow,
+QTabWidget,
 QTabWidget::pane {
-    background: #f7f8fb;
+    background: #eef2f7;
+}
+
+QDialog {
+    background: #e5ebf2;
+}
+
+QDialog QTabWidget::pane {
+    background: #f8fafc;
+    border: 1px solid #c3cedb;
+}
+
+QDialog QTabBar {
+    background: #e5ebf2;
+}
+
+QDialog QTabBar::tab {
+    background: #edf2f7;
+    border: 1px solid #c3cedb;
+    border-bottom: 0;
+    color: #475569;
+}
+
+QDialog QTabBar::tab:selected {
+    background: #f8fafc;
+    color: #111827;
 }
 
 QTabWidget::pane {
     border: 0;
+}
+
+QTabBar {
+    background: #eef2f7;
 }
 
 QTabBar::tab {
     background: transparent;
     border: 0;
-    border-bottom: 2px solid transparent;
+    border-bottom: 3px solid transparent;
     color: #526070;
-    font-weight: 600;
-    min-height: 34px;
-    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    min-height: 42px;
+    padding: 10px 18px;
 }
 
 QTabBar::tab:selected {
@@ -31,7 +62,7 @@ QTabBar::tab:selected {
 QTabBar::tab:hover {
     color: #172033;
     background: #eef2f7;
-    border-radius: 10px;
+    border-radius: 12px;
 }
 
 QLabel#pageTitle {
@@ -50,8 +81,11 @@ QDateEdit {
     background: #ffffff;
     border: 1px solid #d8dee8;
     border-radius: 10px;
+    color: #172033;
     min-height: 32px;
     padding: 4px 9px;
+    selection-background-color: #dbeafe;
+    selection-color: #0f172a;
 }
 
 QPlainTextEdit {
@@ -111,6 +145,27 @@ QDateEdit::down-button {
     width: 24px;
 }
 
+QComboBox QAbstractItemView {
+    background: #ffffff;
+    border: 1px solid #cfd8e3;
+    color: #172033;
+    selection-background-color: #dbeafe;
+    selection-color: #0f172a;
+}
+
+QCalendarWidget {
+    background: #ffffff;
+    color: #172033;
+}
+
+QCalendarWidget QWidget,
+QCalendarWidget QAbstractItemView {
+    background: #ffffff;
+    color: #172033;
+    selection-background-color: #dbeafe;
+    selection-color: #0f172a;
+}
+
 QPushButton {
     background: #ffffff;
     border: 1px solid #d8dee8;
@@ -147,8 +202,8 @@ QPushButton#dangerButton {
 
 QFrame#selectionActionPanel {
     background: #ffffff;
-    border: 1px solid #e1e7ef;
-    border-radius: 16px;
+    border: 1px solid #cfd8e3;
+    border-radius: 12px;
 }
 
 QLabel#selectionActionTitle {
@@ -162,18 +217,23 @@ QLabel#selectionActionHint {
 }
 
 QTableWidget {
-    alternate-background-color: #f8fafc;
+    alternate-background-color: #f6f8fb;
     background: #ffffff;
-    border: 1px solid #e1e7ef;
-    border-radius: 14px;
+    border: 1px solid #cfd8e3;
+    border-radius: 12px;
     gridline-color: transparent;
-    selection-background-color: #dbeafe;
-    selection-color: #111827;
+    selection-background-color: #e8f1ff;
+    selection-color: #0f172a;
 }
 
 QTableWidget::item {
     border: 0;
     padding: 7px 8px;
+}
+
+QTableWidget::item:selected {
+    background: #e8f1ff;
+    color: #0f172a;
 }
 
 QHeaderView::section {

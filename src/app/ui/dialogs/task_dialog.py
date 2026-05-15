@@ -143,10 +143,14 @@ class TaskDialog(QDialog):
         form = QFormLayout()
         self._form = form
         if self._order_id is not None:
-            order_label = QLabel(default_order_label or str(self._order_id))
-            order_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            order_label.setMinimumHeight(self._title_input.sizeHint().height())
-            form.addRow(t("Order"), order_label)
+            order_display = QLineEdit(default_order_label or str(self._order_id))
+            order_display.setReadOnly(True)
+            order_display.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            order_display.setMinimumHeight(self._title_input.sizeHint().height())
+            order_display.setStyleSheet(
+                "QLineEdit { background: #f8fafc; color: #334155; font-weight: 600; }"
+            )
+            form.addRow(t("Order"), order_display)
         form.addRow(t("Title"), self._title_input)
         form.addRow(t("Due date"), self._due_date_input)
         form.addRow(t("Color"), self._color_input)

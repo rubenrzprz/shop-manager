@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -21,7 +23,6 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -61,6 +62,7 @@ class OrderDialog(QDialog):
         self._selected_customer_id: int | None = None
         self._selected_customer_name: str | None = None
         self._selected_line_variant: ProductVariantPickerItem | None = None
+        self._editing_line_index: int | None = None
         self._line_items: list[_OrderLineItem] = []
         self._edit_capability = OrderEditCapability.FULL
 
@@ -71,6 +73,24 @@ class OrderDialog(QDialog):
             height_ratio=0.74,
             min_width=920,
             min_height=560,
+        )
+        self.setObjectName("orderDialog")
+        self.setStyleSheet(
+            """
+            QDialog#orderDialog {
+                background: #e5ebf2;
+            }
+            QDialog#orderDialog QWidget#workspace {
+                background: #f8fafc;
+            }
+            QDialog#orderDialog QFrame#orderPanel,
+            QDialog#orderDialog QFrame#linesPanel,
+            QDialog#orderDialog QFrame#totalsPanel {
+                background: #ffffff;
+                border: 1px solid #d7e0ea;
+                border-radius: 12px;
+            }
+            """
         )
 
         self._customer_display = QLineEdit()
@@ -102,10 +122,6 @@ class OrderDialog(QDialog):
         self._select_variant_button = QPushButton(t("Select Variant"))
         self._select_variant_button.clicked.connect(self._open_variant_picker)
 
-        variant_layout = QHBoxLayout()
-        variant_layout.addWidget(self._variant_display)
-        variant_layout.addWidget(self._select_variant_button)
-
         self._quantity_input = QSpinBox()
         self._quantity_input.setMinimum(1)
         self._quantity_input.setMaximum(self._MAX_QUANTITY)
@@ -119,31 +135,54 @@ class OrderDialog(QDialog):
         self._unit_price_input.setSingleStep(0.01)
         self._unit_price_input.valueChanged.connect(self._sync_composer_quantity_limit)
 
+        self._line_notes_input = QLineEdit()
+        self._line_notes_input.setPlaceholderText(t("Line notes"))
+
         self._add_line_button = QPushButton(t("Add Line"))
         self._add_line_button.clicked.connect(self._add_line_from_composer)
+        self._cancel_line_edit_button = QPushButton(t("Cancel Edit"))
+        self._cancel_line_edit_button.clicked.connect(self._clear_line_composer)
+        self._cancel_line_edit_button.setVisible(False)
 
         composer_fields_layout = QHBoxLayout()
-        composer_fields_layout.addWidget(QLabel(t("Quantity")))
-        composer_fields_layout.addWidget(self._quantity_input)
-        composer_fields_layout.addWidget(QLabel(t("Unit price")))
-        composer_fields_layout.addWidget(self._unit_price_input)
+        composer_fields_layout.setSpacing(8)
+        composer_fields_layout.addWidget(self._variant_display, 1)
+        composer_fields_layout.addWidget(self._select_variant_button)
         composer_fields_layout.addStretch()
+        composer_fields_layout.addWidget(QLabel(t("Qty")))
+        composer_fields_layout.addWidget(self._quantity_input)
+        composer_fields_layout.addWidget(QLabel(t("Unit Price")))
+        composer_fields_layout.addWidget(self._unit_price_input)
         composer_fields_layout.addWidget(self._add_line_button)
+        composer_fields_layout.addWidget(self._cancel_line_edit_button)
 
-        self._line_composer = QWidget()
+        self._line_composer = QFrame()
+        self._line_composer.setObjectName("lineComposer")
         composer_layout = QVBoxLayout()
-        composer_layout.setContentsMargins(0, 0, 0, 0)
-        composer_layout.addLayout(variant_layout)
+        composer_layout.setContentsMargins(12, 12, 12, 12)
+        composer_layout.setSpacing(8)
         composer_layout.addLayout(composer_fields_layout)
+        composer_layout.addWidget(self._line_notes_input)
         self._line_composer.setLayout(composer_layout)
 
         self._lines_table = QTableWidget()
-        self._lines_table.setColumnCount(7)
+        self._lines_table.setColumnCount(8)
         self._lines_table.setHorizontalHeaderLabels(
-            [t("Product"), t("Variant"), "SKU", t("Qty"), t("Unit Price"), t("Line Total"), ""]
+            [
+                t("Product"),
+                t("Variant"),
+                "SKU",
+                t("Qty"),
+                t("Unit Price"),
+                t("Line Total"),
+                t("Notes"),
+                "",
+            ]
         )
         self._lines_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._lines_table.setSelectionMode(QAbstractItemView.NoSelection)
+        self._lines_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._lines_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._lines_table.cellClicked.connect(self._load_line_into_composer)
         self._lines_table.verticalHeader().setVisible(False)
         self._lines_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self._lines_table.setAlternatingRowColors(True)
@@ -156,8 +195,9 @@ class OrderDialog(QDialog):
         lines_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         lines_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         lines_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        lines_header.setSectionResizeMode(6, QHeaderView.Fixed)
-        self._lines_table.setColumnWidth(6, 92)
+        lines_header.setSectionResizeMode(6, QHeaderView.Stretch)
+        lines_header.setSectionResizeMode(7, QHeaderView.Fixed)
+        self._lines_table.setColumnWidth(7, 92)
 
         self._discount_type_input = QComboBox()
         self._discount_type_input.addItem(t("None"), DiscountType.NONE)
@@ -187,33 +227,52 @@ class OrderDialog(QDialog):
         self._notes_input.setFixedHeight(68)
 
         details_form = QFormLayout()
+        details_form.setContentsMargins(18, 18, 18, 18)
+        details_form.setHorizontalSpacing(12)
+        details_form.setVerticalSpacing(14)
         details_form.addRow(t("Customer"), customer_layout)
         details_form.addRow(t("Order date"), self._order_date_input)
         details_form.addRow(t("Deadline"), deadline_layout)
         details_form.addRow(t("Notes"), self._notes_input)
-        details_tab = QWidget()
-        details_tab.setLayout(details_form)
+        details_widget = QFrame()
+        details_widget.setObjectName("orderPanel")
+        details_widget.setLayout(details_form)
 
         lines_layout = QVBoxLayout()
-        lines_layout.addWidget(QLabel(f"<b>{t('Add line')}</b>"))
+        lines_layout.setContentsMargins(18, 18, 18, 18)
+        lines_layout.setSpacing(10)
+        lines_title = QLabel(f"<b>{t('Lines')}</b>")
         lines_layout.addWidget(self._line_composer)
-        lines_layout.addWidget(QLabel(f"<b>{t('Lines')}</b>"))
+        lines_layout.addWidget(lines_title)
         lines_layout.addWidget(self._lines_table, 1)
-        lines_tab = QWidget()
-        lines_tab.setLayout(lines_layout)
+        lines_widget = QFrame()
+        lines_widget.setObjectName("linesPanel")
+        lines_widget.setLayout(lines_layout)
 
         totals_form = QFormLayout()
+        totals_form.setContentsMargins(18, 18, 18, 18)
+        totals_form.setHorizontalSpacing(12)
+        totals_form.setVerticalSpacing(12)
         totals_form.addRow(t("Discount type"), self._discount_type_input)
         totals_form.addRow(t("Discount value"), self._discount_value_input)
         totals_form.addRow(QLabel(f"<b>{t('Total preview')}</b>"))
         totals_form.addRow(self._summary_widget)
-        totals_tab = QWidget()
-        totals_tab.setLayout(totals_form)
+        totals_widget = QFrame()
+        totals_widget.setObjectName("totalsPanel")
+        totals_widget.setLayout(totals_form)
 
-        self._tabs = QTabWidget()
-        self._tabs.addTab(details_tab, t("Order Details"))
-        self._tabs.addTab(lines_tab, t("Lines"))
-        self._tabs.addTab(totals_tab, t("Totals"))
+        workspace_layout = QGridLayout()
+        workspace_layout.setContentsMargins(18, 18, 18, 18)
+        workspace_layout.setSpacing(18)
+        workspace_layout.setColumnStretch(0, 2)
+        workspace_layout.setColumnStretch(1, 5)
+        workspace_layout.setColumnStretch(2, 2)
+        workspace_layout.addWidget(details_widget, 0, 0)
+        workspace_layout.addWidget(lines_widget, 0, 1)
+        workspace_layout.addWidget(totals_widget, 0, 2)
+        workspace = QWidget()
+        workspace.setObjectName("workspace")
+        workspace.setLayout(workspace_layout)
 
         self._buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         translate_button_box(self._buttons)
@@ -221,7 +280,9 @@ class OrderDialog(QDialog):
         self._buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout()
-        layout.addWidget(self._tabs, 1)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(10)
+        layout.addWidget(workspace, 1)
         layout.addWidget(self._buttons)
         self.setLayout(layout)
 
@@ -334,6 +395,10 @@ class OrderDialog(QDialog):
         if self._edit_capability != OrderEditCapability.FULL:
             return
 
+        if self._editing_line_index is not None:
+            self._apply_line_composer_to_selected_line()
+            return
+
         if self._selected_line_variant is None:
             QMessageBox.information(
                 self, t("Missing product variant"), t("Select a product variant.")
@@ -351,9 +416,44 @@ class OrderDialog(QDialog):
                 color=self._selected_line_variant.color,
                 quantity=self._quantity_input.value(),
                 unit_price=self._unit_price_value(),
-                notes=None,
+                notes=self._line_notes_input.text().strip() or None,
             )
         )
+        self._clear_line_composer()
+        self._refresh_lines_table()
+        self._sync_discount_input_state()
+        self._sync_total_preview()
+
+    def _apply_line_composer_to_selected_line(self) -> None:
+        if self._editing_line_index is None:
+            return
+        if not 0 <= self._editing_line_index < len(self._line_items):
+            self._clear_line_composer()
+            return
+
+        current_line = self._line_items[self._editing_line_index]
+        if self._selected_line_variant is None:
+            updated_line = replace(
+                current_line,
+                quantity=self._quantity_input.value(),
+                unit_price=self._unit_price_value(),
+                notes=self._line_notes_input.text().strip() or None,
+            )
+        else:
+            updated_line = _OrderLineItem(
+                order_line_id=current_line.order_line_id,
+                product_variant_id=self._selected_line_variant.id,
+                product_name=self._selected_line_variant.product_name,
+                sku=self._selected_line_variant.sku,
+                variant_name=self._selected_line_variant.variant_name,
+                size=self._selected_line_variant.size,
+                color=self._selected_line_variant.color,
+                quantity=self._quantity_input.value(),
+                unit_price=self._unit_price_value(),
+                notes=self._line_notes_input.text().strip() or None,
+            )
+
+        self._line_items[self._editing_line_index] = updated_line
         self._clear_line_composer()
         self._refresh_lines_table()
         self._sync_discount_input_state()
@@ -364,6 +464,7 @@ class OrderDialog(QDialog):
             return
 
         self._line_items = [item for item in self._line_items if item is not line_item]
+        self._clear_line_composer()
         self._refresh_lines_table()
         self._sync_discount_input_state()
         self._sync_total_preview()
@@ -371,7 +472,9 @@ class OrderDialog(QDialog):
     def _refresh_lines_table(self) -> None:
         can_edit_full_order = self._edit_capability == OrderEditCapability.FULL
         self._lines_table.clearContents()
-        self._lines_table.setColumnHidden(6, not can_edit_full_order)
+        for row in range(self._lines_table.rowCount()):
+            self._lines_table.removeCellWidget(row, 7)
+        self._lines_table.setColumnHidden(7, not can_edit_full_order)
         self._lines_table.setRowCount(len(self._line_items))
 
         for row, line_item in enumerate(self._line_items):
@@ -384,6 +487,7 @@ class OrderDialog(QDialog):
                     "" if line_item.unit_price is None else f"{line_item.unit_price:.2f}"
                 ),
                 QTableWidgetItem(f"{line_item.subtotal():.2f}"),
+                QTableWidgetItem(line_item.notes or ""),
             ]
 
             for item in items:
@@ -398,13 +502,40 @@ class OrderDialog(QDialog):
                 remove_button.clicked.connect(
                     lambda _checked=False, item=line_item: self._remove_line_item(item)
                 )
-                self._lines_table.setCellWidget(row, 6, remove_button)
+                self._lines_table.setCellWidget(row, 7, remove_button)
             else:
-                self._lines_table.setItem(row, 6, QTableWidgetItem(""))
+                self._lines_table.setItem(row, 7, QTableWidgetItem(""))
 
         self._lines_table.resizeRowsToContents()
 
+    def _load_line_into_composer(self, row: int, _column: int) -> None:
+        if self._edit_capability != OrderEditCapability.FULL:
+            return
+        if not 0 <= row < len(self._line_items):
+            return
+
+        line_item = self._line_items[row]
+        self._editing_line_index = row
+        self._selected_line_variant = None
+        self._variant_display.setText(f"{line_item.product_name} / {line_item.sku}")
+        self._quantity_input.setValue(line_item.quantity)
+        self._unit_price_input.blockSignals(True)
+        if line_item.unit_price is None:
+            self._unit_price_input.setMinimum(self._UNSET_UNIT_PRICE)
+            self._unit_price_input.setSpecialValueText(t("Enter price"))
+            self._unit_price_input.setValue(self._UNSET_UNIT_PRICE)
+        else:
+            self._unit_price_input.setMinimum(0)
+            self._unit_price_input.setSpecialValueText("")
+            self._unit_price_input.setValue(float(line_item.unit_price))
+        self._unit_price_input.blockSignals(False)
+        self._line_notes_input.setText(line_item.notes or "")
+        self._add_line_button.setText(t("Apply Line"))
+        self._cancel_line_edit_button.setVisible(True)
+        self._sync_composer_quantity_limit()
+
     def _clear_line_composer(self) -> None:
+        self._editing_line_index = None
         self._selected_line_variant = None
         self._variant_display.clear()
         self._unit_price_input.blockSignals(True)
@@ -412,8 +543,31 @@ class OrderDialog(QDialog):
         self._unit_price_input.setSpecialValueText("")
         self._unit_price_input.setValue(0)
         self._unit_price_input.blockSignals(False)
+        self._line_notes_input.clear()
         self._quantity_input.setValue(1)
+        self._add_line_button.setText(t("Add Line"))
+        self._cancel_line_edit_button.setVisible(False)
         self._sync_composer_quantity_limit()
+
+    def _update_line_quantity(self, index: int, quantity: int) -> None:
+        if not 0 <= index < len(self._line_items):
+            return
+
+        self._line_items[index] = replace(self._line_items[index], quantity=quantity)
+        subtotal_item = self._lines_table.item(index, 5)
+        if subtotal_item is not None:
+            subtotal_item.setText(f"{self._line_items[index].subtotal():.2f}")
+        self._sync_discount_input_state()
+        self._sync_total_preview()
+
+    def _update_line_notes(self, index: int, raw_notes: str) -> None:
+        if not 0 <= index < len(self._line_items):
+            return
+
+        self._line_items[index] = replace(
+            self._line_items[index],
+            notes=raw_notes.strip() or None,
+        )
 
     def _sync_discount_input_state(self, *_args) -> None:
         discount_type = self._discount_type_input.currentData()

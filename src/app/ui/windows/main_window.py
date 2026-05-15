@@ -1,5 +1,5 @@
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QMainWindow, QTabWidget
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtWidgets import QMainWindow, QStyle, QTabWidget
 
 from app.application.services.settings import ApplicationSettingsService
 from app.infrastructure.db.session import SessionLocal
@@ -24,6 +24,10 @@ class MainWindow(QMainWindow):
         self.setWindowState(self.windowState() | Qt.WindowMaximized)
 
         self._tabs = QTabWidget()
+        self._tabs.setIconSize(QSize(22, 22))
+        self._tabs.tabBar().setExpanding(True)
+        self._tabs.tabBar().setUsesScrollButtons(True)
+        self._tabs.tabBar().setElideMode(Qt.ElideRight)
         self._dashboard_page = DashboardPage()
         self._calendar_page = CalendarPage()
         self._products_page = ProductsPage()
@@ -73,6 +77,22 @@ class MainWindow(QMainWindow):
         self._tabs.setTabText(5, t("Customers"))
         self._tabs.setTabText(6, t("Orders"))
         self._tabs.setTabText(7, t("Settings"))
+        self._set_tab_icons()
+
+    def _set_tab_icons(self) -> None:
+        style = self.style()
+        icons = [
+            QStyle.StandardPixmap.SP_ComputerIcon,
+            QStyle.StandardPixmap.SP_FileDialogDetailedView,
+            QStyle.StandardPixmap.SP_DirIcon,
+            QStyle.StandardPixmap.SP_FileDialogListView,
+            QStyle.StandardPixmap.SP_DriveNetIcon,
+            QStyle.StandardPixmap.SP_FileIcon,
+            QStyle.StandardPixmap.SP_FileDialogContentsView,
+            QStyle.StandardPixmap.SP_FileDialogInfoView,
+        ]
+        for index, standard_icon in enumerate(icons):
+            self._tabs.setTabIcon(index, style.standardIcon(standard_icon))
 
     def _run_dashboard_action(self, action: str) -> None:
         modal_actions = {

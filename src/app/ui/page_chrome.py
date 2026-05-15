@@ -13,6 +13,10 @@ from PySide6.QtWidgets import (
 def apply_page_chrome(layout: QBoxLayout) -> None:
     layout.setContentsMargins(24, 20, 24, 24)
     layout.setSpacing(14)
+    parent = layout.parentWidget()
+    if parent is not None:
+        parent.setAutoFillBackground(True)
+        parent.setStyleSheet("background: #eef2f7;")
 
 
 def apply_toolbar_chrome(layout: QBoxLayout) -> None:

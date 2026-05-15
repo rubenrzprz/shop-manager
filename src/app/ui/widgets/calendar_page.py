@@ -36,6 +36,42 @@ class CalendarPage(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
+        self.setObjectName("calendarPage")
+        self.setStyleSheet(
+            """
+            QWidget#calendarPage {
+                background: #eef2f7;
+                color: #172033;
+            }
+            QWidget#calendarPage QScrollArea {
+                background: #eef2f7;
+                border: none;
+            }
+            QWidget#calendarPage QTableWidget#calendarTable {
+                background: #ffffff;
+                alternate-background-color: #ffffff;
+                border: 1px solid #cfd8e3;
+                border-radius: 12px;
+                gridline-color: #e5e7eb;
+                selection-background-color: transparent;
+                selection-color: #172033;
+            }
+            QWidget#calendarPage QTableWidget#calendarTable::item:selected {
+                background: transparent;
+                color: #172033;
+            }
+            QWidget#calendarPage QHeaderView::section {
+                background: #f3f6fa;
+                color: #526070;
+                border: 0;
+                border-bottom: 1px solid #d8dee8;
+                padding: 8px;
+            }
+            QLabel#emptyState {
+                color: #64748b;
+            }
+            """
+        )
 
         today = date.today()
         self._display_year = today.year
@@ -60,6 +96,7 @@ class CalendarPage(QWidget):
         self._refresh_button.clicked.connect(self.load_calendar)
 
         self._calendar_table = QTableWidget(6, 7)
+        self._calendar_table.setObjectName("calendarTable")
         self._calendar_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._calendar_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self._calendar_table.setSelectionBehavior(QAbstractItemView.SelectItems)
@@ -73,9 +110,13 @@ class CalendarPage(QWidget):
         self._selected_day_group.setMinimumWidth(340)
         self._selected_day_group.setMaximumWidth(460)
         self._selected_day_group.setStyleSheet(
-            "QGroupBox { background: #ffffff; border: 1px solid #e1e7ef; "
-            "border-radius: 16px; padding: 14px; margin-top: 12px; font-weight: 700; }"
-            "QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 4px; }"
+            "QGroupBox { background: #ffffff; border: 1px solid #cfd8e3; "
+            "border-radius: 12px; padding: 14px; margin-top: 0; }"
+        )
+        self._selected_day_title = QLabel()
+        self._selected_day_title.setWordWrap(True)
+        self._selected_day_title.setStyleSheet(
+            "font-size: 15px; font-weight: 800; color: #111827; padding-bottom: 8px;"
         )
         self._pending_label = QLabel()
         self._completed_label = QLabel()
@@ -86,6 +127,7 @@ class CalendarPage(QWidget):
         self._completed_tasks_layout = QVBoxLayout()
 
         selected_day_layout = QVBoxLayout()
+        selected_day_layout.addWidget(self._selected_day_title)
         selected_day_layout.addWidget(self._pending_label)
         selected_day_layout.addLayout(self._pending_tasks_layout)
         selected_day_layout.addWidget(self._completed_label)
@@ -287,7 +329,10 @@ class CalendarPage(QWidget):
             selected_day_tasks = task_days[0].tasks if task_days else []
             pending_tasks = [task for task in selected_day_tasks if task.completed_at is None]
             completed_tasks = [task for task in selected_day_tasks if task.completed_at is not None]
-            self._selected_day_group.setTitle(f"{t('Tasks for')} {format_date(self._selected_day)}")
+            self._selected_day_group.setTitle("")
+            self._selected_day_title.setText(
+                f"{t('Tasks for')} {format_date(self._selected_day)}"
+            )
             self._pending_label.setText(t("Pending tasks"))
             self._completed_label.setText(t("Completed tasks"))
             self._populate_task_section(

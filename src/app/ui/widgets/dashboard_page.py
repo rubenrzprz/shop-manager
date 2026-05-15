@@ -48,19 +48,19 @@ class DashboardPage(QWidget):
         self._title_label.setObjectName("pageTitle")
 
         self._shortcuts_title_label = self._section_title()
-        self._products_button = self._shortcut_button("📦", "new_product", "#eff6ff", "#1e3a8a")
-        self._orders_button = self._shortcut_button("🧾", "new_order", "#fef2f2", "#7f1d1d")
-        self._customers_button = self._shortcut_button("👤", "new_customer", "#fffbeb", "#78350f")
-        self._suppliers_button = self._shortcut_button("🤝", "new_supplier", "#f0fdf4", "#14532d")
-        self._tasks_button = self._shortcut_button("✓", "new_task", "#f5f3ff", "#312e81")
-        self._calendar_button = self._shortcut_button("📅", "calendar", "#ecfeff", "#164e63")
-        self._settings_button = self._shortcut_button("⚙", "settings", "#f9fafb", "#374151")
+        self._products_button = self._shortcut_button("📦", "new_product", "#dbeafe", "#1d4ed8")
+        self._orders_button = self._shortcut_button("🧾", "new_order", "#fee2e2", "#b91c1c")
+        self._customers_button = self._shortcut_button("👤", "new_customer", "#fef3c7", "#b45309")
+        self._suppliers_button = self._shortcut_button("🤝", "new_supplier", "#dcfce7", "#15803d")
+        self._tasks_button = self._shortcut_button("✓", "new_task", "#ede9fe", "#6d28d9")
+        self._calendar_button = self._shortcut_button("📅", "calendar", "#cffafe", "#0891b2")
+        self._settings_button = self._shortcut_button("⚙", "settings", "#e2e8f0", "#334155")
 
         left_layout = QVBoxLayout()
         left_layout.setContentsMargins(0, 0, 18, 0)
-        left_layout.setSpacing(12)
+        left_layout.setSpacing(14)
         left_layout.addWidget(self._shortcuts_title_label)
-        left_layout.addStretch()
+        left_layout.addSpacing(20)
         left_layout.addWidget(self._products_button)
         left_layout.addWidget(self._orders_button)
         left_layout.addWidget(self._customers_button)
@@ -99,14 +99,15 @@ class DashboardPage(QWidget):
         middle_layout.addLayout(self._recent_orders_layout)
         middle_layout.addStretch()
         middle_content = QWidget()
+        middle_content.setObjectName("summaryContent")
         middle_content.setLayout(middle_layout)
-        middle_content.setStyleSheet("QWidget { background: #f7f8fa; }")
+        middle_content.setStyleSheet("QWidget#summaryContent { background: #eef2f7; }")
 
         middle_scroll = QScrollArea()
         middle_scroll.setWidgetResizable(True)
         middle_scroll.setFrameShape(QFrame.NoFrame)
         middle_scroll.setWidget(middle_content)
-        middle_scroll.setStyleSheet("QScrollArea { background: #f7f8fa; }")
+        middle_scroll.setStyleSheet("QScrollArea { background: #eef2f7; border: none; }")
 
         middle_column_layout = QVBoxLayout()
         middle_column_layout.setContentsMargins(10, 0, 10, 0)
@@ -114,7 +115,7 @@ class DashboardPage(QWidget):
         middle_column = QFrame()
         middle_column.setObjectName("summaryColumn")
         middle_column.setLayout(middle_column_layout)
-        middle_column.setStyleSheet("QFrame#summaryColumn { background: #f7f8fa; }")
+        middle_column.setStyleSheet("QFrame#summaryColumn { background: #eef2f7; }")
 
         self._tasks_title_label = self._section_title()
         self._selected_date_input = AppDateEdit()
@@ -151,7 +152,8 @@ class DashboardPage(QWidget):
         task_date_layout.addWidget(self._add_task_button)
 
         tasks_content = QWidget()
-        tasks_content.setStyleSheet("QWidget { background: #ffffff; }")
+        tasks_content.setObjectName("tasksContent")
+        tasks_content.setStyleSheet("QWidget#tasksContent { background: #eef2f7; }")
         tasks_layout = QVBoxLayout()
         tasks_layout.setContentsMargins(0, 0, 0, 0)
         tasks_layout.setSpacing(12)
@@ -170,18 +172,22 @@ class DashboardPage(QWidget):
         tasks_scroll.setWidgetResizable(True)
         tasks_scroll.setFrameShape(QFrame.NoFrame)
         tasks_scroll.setWidget(tasks_content)
-        tasks_scroll.setStyleSheet("QScrollArea { background: #ffffff; border: none; }")
+        tasks_scroll.setStyleSheet("QScrollArea { background: #eef2f7; border: none; }")
 
         right_layout = QVBoxLayout()
         right_layout.setContentsMargins(12, 0, 0, 0)
         right_layout.addWidget(tasks_scroll)
         right_column = QWidget()
+        right_column.setObjectName("tasksColumn")
+        right_column.setStyleSheet("QWidget#tasksColumn { background: #eef2f7; }")
         right_column.setLayout(right_layout)
 
         content_layout = QHBoxLayout()
-        content_layout.setSpacing(0)
+        content_layout.setSpacing(12)
         content_layout.addWidget(left_column, 1)
+        content_layout.addWidget(self._column_separator())
         content_layout.addWidget(middle_column, 1)
+        content_layout.addWidget(self._column_separator())
         content_layout.addWidget(right_column, 1)
 
         layout = QVBoxLayout()
@@ -301,15 +307,15 @@ class DashboardPage(QWidget):
         foreground: str,
     ) -> QPushButton:
         button = QPushButton()
-        button.setMinimumHeight(48)
+        button.setMinimumHeight(74)
         button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         button.setStyleSheet(
             "QPushButton { "
             f"background: {background}; color: {foreground}; "
-            "border: 1px solid rgba(15, 23, 42, 0.08); border-radius: 20px; "
-            "padding: 10px 14px; text-align: left; font-weight: 650; "
+            "border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 18px; "
+            "font-size: 17px; padding: 14px 18px; text-align: center; font-weight: 850; "
             "} "
-            "QPushButton:hover { border: 1px solid rgba(15, 23, 42, 0.22); }"
+            "QPushButton:hover { border: 1px solid rgba(15, 23, 42, 0.28); }"
         )
         if action == "new_task":
             button.clicked.connect(self._open_task_dialog)
@@ -352,8 +358,19 @@ class DashboardPage(QWidget):
 
     def _section_title(self) -> QLabel:
         label = QLabel()
-        label.setStyleSheet("font-size: 16px; font-weight: 700; color: #111827;")
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet(
+            "font-size: 19px; font-weight: 800; color: #111827; padding: 8px 0 12px 0;"
+        )
         return label
+
+    @staticmethod
+    def _column_separator() -> QFrame:
+        separator = QFrame()
+        separator.setFrameShape(QFrame.VLine)
+        separator.setFixedWidth(1)
+        separator.setStyleSheet("background: #cfd8e3; border: 0;")
+        return separator
 
     def _subsection_title(self) -> QLabel:
         label = QLabel()
@@ -415,6 +432,18 @@ class DashboardPage(QWidget):
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.addWidget(title, 1)
         header_layout.addWidget(badge, 0, Qt.AlignTop)
+        add_task_button = QPushButton("+")
+        add_task_button.setToolTip(t("Create Order Reminder"))
+        add_task_button.setFixedSize(30, 30)
+        add_task_button.setStyleSheet(
+            "QPushButton { background: #ffffff; border: 1px solid #d8dee8; "
+            "border-radius: 15px; color: #172033; font-weight: 800; padding: 0; }"
+            "QPushButton:hover { background: #eef2ff; border-color: #93c5fd; }"
+        )
+        add_task_button.clicked.connect(
+            lambda _checked=False, item=order: self._open_order_task_dialog(item)
+        )
+        header_layout.addWidget(add_task_button, 0, Qt.AlignTop)
         detail_parts = [order_status_label(order.status), f"{t('Total')}: {order.total_amount}"]
         if include_deadline and order.deadline is not None:
             detail_parts.insert(0, f"{t('Deadline')}: {format_date(order.deadline)}")
@@ -562,6 +591,19 @@ class DashboardPage(QWidget):
         dialog = TaskDialog(self, default_due_date=self._selected_date())
         if dialog.exec():
             self.load_tasks()
+            self.task_changed.emit()
+
+    def _open_order_task_dialog(self, order: DashboardOrderItem) -> None:
+        due_date = order.deadline or self._selected_date()
+        order_label = f"{order.order_number} · {order.customer_name}"
+        dialog = TaskDialog(
+            self,
+            default_due_date=due_date,
+            default_order_id=order.id,
+            default_order_label=order_label,
+        )
+        if dialog.exec():
+            self._load_dashboard()
             self.task_changed.emit()
 
     def _open_task_edit_dialog(self, task_id: int) -> None:

@@ -9,6 +9,7 @@ class AppDateEdit(QDateEdit):
     def __init__(self) -> None:
         super().__init__()
         self.setCalendarPopup(True)
+        self.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.refresh_display_format()
 
     def refresh_display_format(self) -> None:
