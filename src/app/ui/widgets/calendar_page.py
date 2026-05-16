@@ -1,5 +1,6 @@
 from calendar import Calendar, month_name
 from datetime import date
+from html import escape as html_escape
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QCursor
@@ -34,6 +35,7 @@ from app.ui.task_colors import task_background
 
 class CalendarPage(QWidget):
     task_changed = Signal()
+    _MAX_TASK_DESCRIPTION_CHARS = 120
 
     def __init__(self) -> None:
         super().__init__()
@@ -109,8 +111,8 @@ class CalendarPage(QWidget):
             self._calendar_table.setRowHeight(row, 104)
 
         self._selected_day_group = QGroupBox()
-        self._selected_day_group.setMinimumWidth(340)
-        self._selected_day_group.setMaximumWidth(460)
+        self._selected_day_group.setMinimumWidth(380)
+        self._selected_day_group.setMaximumWidth(620)
         self._selected_day_group.setStyleSheet(
             "QGroupBox { background: #ffffff; border: 1px solid #cfd8e3; "
             "border-radius: 12px; padding: 14px; margin-top: 0; }"
@@ -127,8 +129,12 @@ class CalendarPage(QWidget):
         self._completed_label.setStyleSheet(section_style)
         self._pending_tasks_layout = QVBoxLayout()
         self._completed_tasks_layout = QVBoxLayout()
+        self._pending_tasks_layout.setSpacing(8)
+        self._completed_tasks_layout.setSpacing(8)
 
         selected_day_layout = QVBoxLayout()
+        selected_day_layout.setContentsMargins(10, 14, 10, 10)
+        selected_day_layout.setSpacing(8)
         selected_day_layout.addWidget(self._selected_day_title)
         selected_day_layout.addWidget(self._pending_label)
         selected_day_layout.addLayout(self._pending_tasks_layout)
@@ -138,8 +144,8 @@ class CalendarPage(QWidget):
         self._selected_day_group.setLayout(selected_day_layout)
 
         self._selected_day_scroll = QScrollArea()
-        self._selected_day_scroll.setMinimumWidth(360)
-        self._selected_day_scroll.setMaximumWidth(480)
+        self._selected_day_scroll.setMinimumWidth(400)
+        self._selected_day_scroll.setMaximumWidth(660)
         self._selected_day_scroll.setWidgetResizable(True)
         self._selected_day_scroll.setWidget(self._selected_day_group)
 
@@ -156,7 +162,7 @@ class CalendarPage(QWidget):
         layout.addWidget(self._title_label)
         layout.addLayout(header_layout)
         content_layout = QHBoxLayout()
-        content_layout.addWidget(self._selected_day_scroll)
+        content_layout.addWidget(self._selected_day_scroll, 0)
         content_layout.addWidget(self._calendar_table, 1)
         layout.addLayout(content_layout, 1)
         self.setLayout(layout)
@@ -382,16 +388,13 @@ class CalendarPage(QWidget):
             return
 
         for task in tasks:
-            row_frame = QFrame()
-            self._register_task_click_target(row_frame, task)
-            row_frame.setStyleSheet("QFrame { background: transparent; border: 0; }")
-
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(8)
 
             label = QLabel(self._task_detail_label(task))
             self._register_task_click_target(label, task)
+            label.setTextFormat(Qt.RichText)
             label.setWordWrap(True)
             label.setStyleSheet(self._task_detail_style(task))
 
@@ -403,9 +406,8 @@ class CalendarPage(QWidget):
             button.clicked.connect(lambda _checked=False, task_id=task.id: action(task_id))
 
             row.addWidget(label, 1)
-            row.addWidget(button, 0, Qt.AlignTop)
-            row_frame.setLayout(row)
-            layout.addWidget(row_frame)
+            row.addWidget(button, 0, Qt.AlignRight | Qt.AlignTop)
+            layout.addLayout(row)
 
     def _register_task_click_target(self, widget: QWidget, task: TaskListItem) -> None:
         if task.is_auto_order_follow_up:
@@ -544,12 +546,24 @@ class CalendarPage(QWidget):
 
     @classmethod
     def _task_detail_label(cls, task: TaskListItem) -> str:
-        title = cls._task_title(task)
+        title = html_escape(cls._task_title(task))
         description = cls._task_description(task)
         if description:
-            return f"{title} ({description})"
+            description_text = html_escape(cls._shorten_task_text(description))
+            return (
+                f"<span style='font-weight:650; color:#111827;'>{title}</span>"
+                f"<br><span style='color:#475569;'>{description_text}</span>"
+            )
 
-        return title
+        return f"<span style='font-weight:650; color:#111827;'>{title}</span>"
+
+    @classmethod
+    def _shorten_task_text(cls, text: str) -> str:
+        normalized = " ".join(text.split())
+        if len(normalized) <= cls._MAX_TASK_DESCRIPTION_CHARS:
+            return normalized
+
+        return normalized[: cls._MAX_TASK_DESCRIPTION_CHARS - 3].rstrip() + "..."
 
     @staticmethod
     def _task_description(task: TaskListItem) -> str | None:

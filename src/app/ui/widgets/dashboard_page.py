@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from html import escape as html_escape
 
 from PySide6.QtCore import QDate, QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QCursor
@@ -41,6 +42,7 @@ class DashboardPage(QWidget):
     action_requested = Signal(str)
     order_requested = Signal(int)
     task_changed = Signal()
+    _MAX_TASK_DESCRIPTION_CHARS = 120
 
     def __init__(self) -> None:
         super().__init__()
@@ -543,6 +545,7 @@ class DashboardPage(QWidget):
 
         meta_label = QLabel(self._task_meta(task))
         self._register_task_click_target(meta_label, task)
+        meta_label.setTextFormat(Qt.RichText)
         meta_label.setWordWrap(True)
         meta_label.setStyleSheet(
             "color: #6b7280;" + (" text-decoration: line-through;" if completed else "")
@@ -609,12 +612,24 @@ class DashboardPage(QWidget):
 
     @classmethod
     def _task_meta(cls, task: TaskListItem) -> str:
-        details = [f"{t('Due date')}: {format_date(task.due_date)}"]
+        due_date_text = html_escape(f"{t('Due date')}: {format_date(task.due_date)}")
         description = cls._task_description(task)
         if description:
-            details.append(description)
+            description_text = html_escape(cls._shorten_task_text(description))
+            return (
+                f"<span style='color:#64748b; font-weight:650;'>{due_date_text}</span>"
+                f"<br><span style='color:#475569;'>{description_text}</span>"
+            )
 
-        return " · ".join(details)
+        return f"<span style='color:#64748b; font-weight:650;'>{due_date_text}</span>"
+
+    @classmethod
+    def _shorten_task_text(cls, text: str) -> str:
+        normalized = " ".join(text.split())
+        if len(normalized) <= cls._MAX_TASK_DESCRIPTION_CHARS:
+            return normalized
+
+        return normalized[: cls._MAX_TASK_DESCRIPTION_CHARS - 3].rstrip() + "..."
 
     @classmethod
     def _task_label(cls, task: TaskListItem) -> str:
