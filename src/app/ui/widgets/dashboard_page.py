@@ -548,13 +548,11 @@ class DashboardPage(QWidget):
             "color: #6b7280;" + (" text-decoration: line-through;" if completed else "")
         )
 
-        button = QPushButton(action_label)
-        button.setMinimumHeight(30)
-        button.setStyleSheet(
-            "QPushButton { background: #f9fafb; border: 1px solid #e5e7eb; "
-            "border-radius: 10px; padding: 4px 10px; font-weight: 600; }"
-            "QPushButton:hover { background: #f3f4f6; }"
-        )
+        button = QPushButton("↶" if completed else "✓")
+        button.setFixedSize(38, 38)
+        button.setMinimumSize(38, 38)
+        button.setMaximumSize(38, 38)
+        button.setStyleSheet(self._task_action_button_stylesheet(border, marker_color))
         button.clicked.connect(lambda _checked=False, task_id=task.id: action(task_id))
 
         text_layout = QVBoxLayout()
@@ -571,6 +569,20 @@ class DashboardPage(QWidget):
         row.addWidget(button, 0, Qt.AlignVCenter)
         frame.setLayout(row)
         return frame
+
+    @staticmethod
+    def _task_action_button_stylesheet(border: str, foreground: str) -> str:
+        return (
+            "QPushButton { "
+            "background: #ffffff; "
+            f"color: {foreground}; "
+            f"border: 1px solid {border}; "
+            "min-width: 38px; max-width: 38px; min-height: 38px; max-height: 38px; "
+            "border-radius: 19px; padding: 0; font-size: 17px; font-weight: 800; "
+            "}"
+            "QPushButton:hover { background: #f8fafc; border-color: #94a3b8; }"
+            "QPushButton:pressed { background: #eef2f7; }"
+        )
 
     def _register_task_click_target(self, widget: QWidget, task: TaskListItem) -> None:
         if task.is_auto_order_follow_up:

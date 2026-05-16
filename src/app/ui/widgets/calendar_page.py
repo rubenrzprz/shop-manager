@@ -382,6 +382,10 @@ class CalendarPage(QWidget):
             return
 
         for task in tasks:
+            row_frame = QFrame()
+            self._register_task_click_target(row_frame, task)
+            row_frame.setStyleSheet("QFrame { background: transparent; border: 0; }")
+
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(8)
@@ -391,18 +395,17 @@ class CalendarPage(QWidget):
             label.setWordWrap(True)
             label.setStyleSheet(self._task_detail_style(task))
 
-            button = QPushButton(action_label)
-            button.setMinimumHeight(30)
-            button.setStyleSheet(
-                "QPushButton { background: #f9fafb; border: 1px solid #d8dee8; "
-                "border-radius: 10px; padding: 4px 10px; font-weight: 600; }"
-                "QPushButton:hover { background: #f3f4f6; }"
-            )
+            button = QPushButton("↶" if task.completed_at is not None else "✓")
+            button.setFixedSize(38, 38)
+            button.setMinimumSize(38, 38)
+            button.setMaximumSize(38, 38)
+            button.setStyleSheet(self._task_action_button_stylesheet(task))
             button.clicked.connect(lambda _checked=False, task_id=task.id: action(task_id))
 
             row.addWidget(label, 1)
             row.addWidget(button, 0, Qt.AlignTop)
-            layout.addLayout(row)
+            row_frame.setLayout(row)
+            layout.addWidget(row_frame)
 
     def _register_task_click_target(self, widget: QWidget, task: TaskListItem) -> None:
         if task.is_auto_order_follow_up:
@@ -411,6 +414,30 @@ class CalendarPage(QWidget):
         widget.setProperty("calendarTaskId", task.id)
         widget.setCursor(Qt.PointingHandCursor)
         widget.installEventFilter(self)
+
+    @staticmethod
+    def _task_action_button_stylesheet(task: TaskListItem) -> str:
+        if task.completed_at is not None:
+            border = "#bbf7d0"
+            foreground = "#166534"
+        elif task.is_auto_order_follow_up:
+            border = "#c4b5fd"
+            foreground = "#4c1d95"
+        else:
+            border = task.color_hex
+            foreground = "#111827"
+
+        return (
+            "QPushButton { "
+            "background: #ffffff; "
+            f"color: {foreground}; "
+            f"border: 1px solid {border}; "
+            "min-width: 38px; max-width: 38px; min-height: 38px; max-height: 38px; "
+            "border-radius: 19px; padding: 0; font-size: 17px; font-weight: 800; "
+            "}"
+            "QPushButton:hover { background: #f8fafc; border-color: #94a3b8; }"
+            "QPushButton:pressed { background: #eef2f7; }"
+        )
 
     def _open_task_dialog(self) -> None:
         dialog = TaskDialog(self, default_due_date=self._selected_day)
