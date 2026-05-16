@@ -1,9 +1,11 @@
 from calendar import Calendar, month_name
 from datetime import date
 
-from PySide6.QtCore import QEvent, QObject, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
+from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QFrame,
     QGroupBox,
     QHeaderView,
@@ -28,7 +30,6 @@ from app.infrastructure.db.session import SessionLocal
 from app.ui.dialogs.task_dialog import TaskDialog
 from app.ui.localization import format_date, t
 from app.ui.task_colors import task_background
-from app.ui.widgets.task_card import TaskCard, task_card_state
 
 
 class CalendarPage(QWidget):
@@ -36,6 +37,7 @@ class CalendarPage(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
+        self._task_action_in_progress = False
         self.setObjectName("calendarPage")
         self.setStyleSheet(
             """
@@ -160,7 +162,7 @@ class CalendarPage(QWidget):
         self.setLayout(layout)
 
         self.retranslate_ui()
-        self.load_calendar()
+        QTimer.singleShot(0, self.load_calendar)
 
     def retranslate_ui(self) -> None:
         self._title_label.setText(t("Calendar"))
@@ -266,7 +268,6 @@ class CalendarPage(QWidget):
         for task in tasks[:2]:
             task_label = QLabel(self._task_title(task))
             self._register_calendar_click_target(task_label, day)
-            task_label.setToolTip(self._task_detail_label(task))
             task_label.setFixedHeight(18)
             task_label.setTextFormat(Qt.PlainText)
             task_label.setStyleSheet(self._task_block_style(task))
@@ -306,6 +307,8 @@ class CalendarPage(QWidget):
         if event.type() == QEvent.Type.MouseButtonPress:
             task_id = source.property("calendarTaskId")
             if task_id is not None:
+                if self._task_action_in_progress or self._cursor_is_on_button():
+                    return False
                 self._open_task_edit_dialog(int(task_id))
                 return True
             ordinal = source.property("calendarDayOrdinal")
@@ -313,6 +316,15 @@ class CalendarPage(QWidget):
                 self._select_day(date.fromordinal(int(ordinal)))
                 return True
         return super().eventFilter(source, event)
+
+    @staticmethod
+    def _cursor_is_on_button() -> bool:
+        widget = QApplication.widgetAt(QCursor.pos())
+        while widget is not None:
+            if isinstance(widget, QPushButton):
+                return True
+            widget = widget.parentWidget()
+        return False
 
     def _load_selected_day_tasks(self) -> None:
         try:
@@ -370,19 +382,27 @@ class CalendarPage(QWidget):
             return
 
         for task in tasks:
-            state = task_card_state(task)
-            layout.addWidget(
-                TaskCard(
-                    task=task,
-                    title=self._task_title(task),
-                    description=self._task_description(task),
-                    state=state,
-                    action_label=action_label,
-                    action_icon="↶" if state == "completed" else "✓",
-                    action=action,
-                    register_click_target=self._register_task_click_target,
-                )
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(8)
+
+            label = QLabel(self._task_detail_label(task))
+            self._register_task_click_target(label, task)
+            label.setWordWrap(True)
+            label.setStyleSheet(self._task_detail_style(task))
+
+            button = QPushButton(action_label)
+            button.setMinimumHeight(30)
+            button.setStyleSheet(
+                "QPushButton { background: #f9fafb; border: 1px solid #d8dee8; "
+                "border-radius: 10px; padding: 4px 10px; font-weight: 600; }"
+                "QPushButton:hover { background: #f3f4f6; }"
             )
+            button.clicked.connect(lambda _checked=False, task_id=task.id: action(task_id))
+
+            row.addWidget(label, 1)
+            row.addWidget(button, 0, Qt.AlignTop)
+            layout.addLayout(row)
 
     def _register_task_click_target(self, widget: QWidget, task: TaskListItem) -> None:
         if task.is_auto_order_follow_up:
@@ -411,9 +431,12 @@ class CalendarPage(QWidget):
         self._change_task_completion(task_id, complete=False)
 
     def _change_task_completion(self, task_id: int, complete: bool) -> None:
+        self._task_action_in_progress = True
+        task_updated = False
         try:
             session = SessionLocal()
         except Exception as exc:
+            self._task_action_in_progress = False
             QMessageBox.critical(self, t("Could not update task"), str(exc))
             return
 
@@ -423,13 +446,24 @@ class CalendarPage(QWidget):
             else:
                 ReopenTaskService(session).execute(task_id)
             session.commit()
-            self.load_calendar()
-            self.task_changed.emit()
+            task_updated = True
         except Exception as exc:
             session.rollback()
             QMessageBox.critical(self, t("Could not update task"), t(str(exc)))
         finally:
             session.close()
+            if task_updated:
+                QTimer.singleShot(0, self._finish_task_completion_update)
+            else:
+                QTimer.singleShot(0, self._clear_task_action_in_progress)
+
+    def _finish_task_completion_update(self) -> None:
+        self.load_calendar()
+        self.task_changed.emit()
+        self._clear_task_action_in_progress()
+
+    def _clear_task_action_in_progress(self) -> None:
+        self._task_action_in_progress = False
 
     def _show_previous_month(self) -> None:
         if self._display_month == 1:
@@ -513,3 +547,7 @@ class CalendarPage(QWidget):
             f"background: {task_background(task.color_hex)}; color: #111827; "
             f"border-left: 4px solid {task.color_hex}; border-radius: 3px; padding: 1px 4px;"
         )
+
+    @staticmethod
+    def _task_detail_style(task: TaskListItem) -> str:
+        return f"{CalendarPage._task_block_style(task)} min-height: 24px;"

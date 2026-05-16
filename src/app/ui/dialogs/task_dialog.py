@@ -86,7 +86,7 @@ class TaskDialog(QDialog):
         )
 
         self._title_input = QLineEdit()
-        self._due_date_input = AppDateEdit()
+        self._due_date_input = AppDateEdit(self)
         due_date = default_due_date or date.today()
         self._due_date_input.setDate(QDate(due_date.year, due_date.month, due_date.day))
         self._notes_input = QPlainTextEdit()
@@ -125,7 +125,7 @@ class TaskDialog(QDialog):
         self._monthly_day_input.setMaximum(31)
         self._monthly_day_input.setValue(due_date.day)
         self._ends_on_checkbox = QCheckBox()
-        self._ends_on_input = AppDateEdit()
+        self._ends_on_input = AppDateEdit(self)
         self._ends_on_input.setDate(self._due_date_input.date())
         self._update_scope_input = QComboBox()
         self._update_scope_input.addItem(t("This task only"), TaskSeriesUpdateScope.OCCURRENCE)

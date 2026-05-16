@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     app = QApplication(sys.argv)
+    app.setApplicationName("Shop Manager")
+    app.setApplicationDisplayName("Shop Manager")
 
     app.setStyleSheet(APP_STYLESHEET)
 

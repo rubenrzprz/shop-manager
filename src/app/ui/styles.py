@@ -84,6 +84,7 @@ QDateEdit {
     color: #172033;
     min-height: 32px;
     padding: 4px 9px;
+    padding-right: 26px;
     selection-background-color: #dbeafe;
     selection-color: #0f172a;
 }
@@ -143,6 +144,29 @@ QDateEdit::up-button,
 QDateEdit::down-button {
     border: 0;
     width: 24px;
+}
+
+QComboBox::down-arrow,
+QDateEdit::down-arrow {
+    image: url(src/app/ui/assets/chevron-down.svg);
+    width: 10px;
+    height: 10px;
+}
+
+QSpinBox::up-arrow,
+QDoubleSpinBox::up-arrow,
+QDateEdit::up-arrow {
+    image: url(src/app/ui/assets/chevron-up.svg);
+    width: 10px;
+    height: 10px;
+}
+
+QSpinBox::down-arrow,
+QDoubleSpinBox::down-arrow,
+QDateEdit::down-arrow {
+    image: url(src/app/ui/assets/chevron-down.svg);
+    width: 10px;
+    height: 10px;
 }
 
 QComboBox QAbstractItemView {

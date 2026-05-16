@@ -15,11 +15,14 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLayout,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QCheckBox,
+    QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -54,6 +57,9 @@ class OrderDialog(QDialog):
     _UNSET_UNIT_PRICE = -0.01
     _MAX_MONEY_AMOUNT = Decimal("99999999.99")
     _MAX_QUANTITY = 999999
+    _MINIMUM_DIALOG_WIDTH = 760
+    _MINIMUM_DIALOG_HEIGHT = 520
+    _SINGLE_COLUMN_BREAKPOINT = 1200
 
     def __init__(self, parent=None, order_id: int | None = None) -> None:
         super().__init__(parent)
@@ -71,24 +77,38 @@ class OrderDialog(QDialog):
             self,
             width_ratio=0.86,
             height_ratio=0.74,
-            min_width=920,
-            min_height=560,
+            min_width=self._MINIMUM_DIALOG_WIDTH,
+            min_height=self._MINIMUM_DIALOG_HEIGHT,
         )
+        self.setMinimumSize(self._MINIMUM_DIALOG_WIDTH, self._MINIMUM_DIALOG_HEIGHT)
+        self._workspace_is_single_column: bool | None = None
+        self._composer_is_compact: bool | None = None
         self.setObjectName("orderDialog")
         self.setStyleSheet(
             """
             QDialog#orderDialog {
-                background: #e5ebf2;
+                background: #eef2f7;
+            }
+            QDialog#orderDialog QScrollArea#orderScroll {
+                background: #eef2f7;
+                border: 0;
+            }
+            QDialog#orderDialog QScrollArea#orderScroll QWidget#qt_scrollarea_viewport {
+                background: #eef2f7;
             }
             QDialog#orderDialog QWidget#workspace {
-                background: #f8fafc;
+                background: #eef2f7;
             }
             QDialog#orderDialog QFrame#orderPanel,
             QDialog#orderDialog QFrame#linesPanel,
             QDialog#orderDialog QFrame#totalsPanel {
-                background: #ffffff;
-                border: 1px solid #d7e0ea;
-                border-radius: 12px;
+                background: #f8fafc;
+                border: 1px solid #cfd8e3;
+                border-radius: 18px;
+            }
+            QDialog#orderDialog QFrame#lineComposer {
+                background: transparent;
+                border: 0;
             }
             """
         )
@@ -96,20 +116,28 @@ class OrderDialog(QDialog):
         self._customer_display = QLineEdit()
         self._customer_display.setReadOnly(True)
         self._customer_display.setPlaceholderText(t("No customer selected"))
+        self._customer_display.setMinimumWidth(140)
+        self._customer_display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._select_customer_button = QPushButton(t("Select Customer"))
+        self._select_customer_button.setMinimumWidth(150)
+        self._select_customer_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._select_customer_button.clicked.connect(self._open_customer_picker)
 
-        customer_layout = QHBoxLayout()
-        customer_layout.addWidget(self._customer_display)
-        customer_layout.addWidget(self._select_customer_button)
+        customer_layout = QGridLayout()
+        customer_layout.setContentsMargins(0, 0, 0, 0)
+        customer_layout.setColumnStretch(0, 1)
+        customer_layout.addWidget(self._customer_display, 0, 0)
+        customer_layout.addWidget(self._select_customer_button, 0, 1)
 
-        self._order_date_input = AppDateEdit()
+        self._order_date_input = AppDateEdit(self)
+        self._order_date_input.setMinimumWidth(150)
         self._order_date_input.setDate(QDate.currentDate())
         self._order_date_input.dateChanged.connect(self._sync_deadline_constraints)
 
         self._has_deadline_checkbox = QCheckBox(t("Set deadline"))
         self._has_deadline_checkbox.toggled.connect(self._sync_deadline_constraints)
-        self._deadline_input = AppDateEdit()
+        self._deadline_input = AppDateEdit(self)
+        self._deadline_input.setMinimumWidth(150)
         self._deadline_input.setEnabled(False)
 
         deadline_layout = QHBoxLayout()
@@ -119,16 +147,24 @@ class OrderDialog(QDialog):
         self._variant_display = QLineEdit()
         self._variant_display.setReadOnly(True)
         self._variant_display.setPlaceholderText(t("No product variant selected"))
+        self._variant_display.setMinimumWidth(150)
+        self._variant_display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._select_variant_button = QPushButton(t("Select Variant"))
+        self._select_variant_button.setMinimumWidth(156)
+        self._select_variant_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._select_variant_button.clicked.connect(self._open_variant_picker)
 
         self._quantity_input = QSpinBox()
+        self._quantity_input.setMinimumWidth(66)
+        self._quantity_input.setMaximumWidth(84)
         self._quantity_input.setMinimum(1)
         self._quantity_input.setMaximum(self._MAX_QUANTITY)
         self._quantity_input.setValue(1)
         self._quantity_input.valueChanged.connect(self._sync_composer_quantity_limit)
 
         self._unit_price_input = QDoubleSpinBox()
+        self._unit_price_input.setMinimumWidth(92)
+        self._unit_price_input.setMaximumWidth(112)
         self._unit_price_input.setMinimum(0)
         self._unit_price_input.setMaximum(float(self._MAX_MONEY_AMOUNT))
         self._unit_price_input.setDecimals(2)
@@ -137,31 +173,29 @@ class OrderDialog(QDialog):
 
         self._line_notes_input = QLineEdit()
         self._line_notes_input.setPlaceholderText(t("Line notes"))
+        self._line_notes_input.setMinimumWidth(120)
 
         self._add_line_button = QPushButton(t("Add Line"))
+        self._add_line_button.setMinimumWidth(118)
+        self._add_line_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._add_line_button.clicked.connect(self._add_line_from_composer)
         self._cancel_line_edit_button = QPushButton(t("Cancel Edit"))
+        self._cancel_line_edit_button.setMinimumWidth(118)
+        self._cancel_line_edit_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._cancel_line_edit_button.clicked.connect(self._clear_line_composer)
         self._cancel_line_edit_button.setVisible(False)
 
-        composer_fields_layout = QHBoxLayout()
-        composer_fields_layout.setSpacing(8)
-        composer_fields_layout.addWidget(self._variant_display, 1)
-        composer_fields_layout.addWidget(self._select_variant_button)
-        composer_fields_layout.addStretch()
-        composer_fields_layout.addWidget(QLabel(t("Qty")))
-        composer_fields_layout.addWidget(self._quantity_input)
-        composer_fields_layout.addWidget(QLabel(t("Unit Price")))
-        composer_fields_layout.addWidget(self._unit_price_input)
-        composer_fields_layout.addWidget(self._add_line_button)
-        composer_fields_layout.addWidget(self._cancel_line_edit_button)
+        self._quantity_label = QLabel(t("Qty"))
+        self._unit_price_label = QLabel(t("Unit Price"))
+        self._composer_fields_layout = QGridLayout()
+        self._composer_fields_layout.setSpacing(8)
 
         self._line_composer = QFrame()
         self._line_composer.setObjectName("lineComposer")
         composer_layout = QVBoxLayout()
         composer_layout.setContentsMargins(12, 12, 12, 12)
         composer_layout.setSpacing(8)
-        composer_layout.addLayout(composer_fields_layout)
+        composer_layout.addLayout(self._composer_fields_layout)
         composer_layout.addWidget(self._line_notes_input)
         self._line_composer.setLayout(composer_layout)
 
@@ -183,20 +217,31 @@ class OrderDialog(QDialog):
         self._lines_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._lines_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self._lines_table.cellClicked.connect(self._load_line_into_composer)
+        self._lines_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._lines_table.verticalHeader().setVisible(False)
         self._lines_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self._lines_table.setAlternatingRowColors(True)
         self._lines_table.setMinimumHeight(120)
+        self._lines_table.setMinimumWidth(0)
+        self._lines_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         lines_header = self._lines_table.horizontalHeader()
-        lines_header.setSectionResizeMode(0, QHeaderView.Stretch)
-        lines_header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        lines_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        lines_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        lines_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        lines_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        lines_header.setSectionResizeMode(6, QHeaderView.Stretch)
+        lines_header.setStretchLastSection(False)
+        lines_header.setSectionResizeMode(0, QHeaderView.Interactive)
+        lines_header.setSectionResizeMode(1, QHeaderView.Interactive)
+        lines_header.setSectionResizeMode(2, QHeaderView.Interactive)
+        lines_header.setSectionResizeMode(3, QHeaderView.Interactive)
+        lines_header.setSectionResizeMode(4, QHeaderView.Interactive)
+        lines_header.setSectionResizeMode(5, QHeaderView.Interactive)
+        lines_header.setSectionResizeMode(6, QHeaderView.Interactive)
         lines_header.setSectionResizeMode(7, QHeaderView.Fixed)
+        self._lines_table.setColumnWidth(0, 170)
+        self._lines_table.setColumnWidth(1, 150)
+        self._lines_table.setColumnWidth(2, 100)
+        self._lines_table.setColumnWidth(3, 70)
+        self._lines_table.setColumnWidth(4, 130)
+        self._lines_table.setColumnWidth(5, 120)
+        self._lines_table.setColumnWidth(6, 180)
         self._lines_table.setColumnWidth(7, 92)
 
         self._discount_type_input = QComboBox()
@@ -234,9 +279,10 @@ class OrderDialog(QDialog):
         details_form.addRow(t("Order date"), self._order_date_input)
         details_form.addRow(t("Deadline"), deadline_layout)
         details_form.addRow(t("Notes"), self._notes_input)
-        details_widget = QFrame()
-        details_widget.setObjectName("orderPanel")
-        details_widget.setLayout(details_form)
+        self._details_widget = QFrame()
+        self._details_widget.setObjectName("orderPanel")
+        self._details_widget.setMinimumWidth(0)
+        self._details_widget.setLayout(details_form)
 
         lines_layout = QVBoxLayout()
         lines_layout.setContentsMargins(18, 18, 18, 18)
@@ -245,9 +291,10 @@ class OrderDialog(QDialog):
         lines_layout.addWidget(self._line_composer)
         lines_layout.addWidget(lines_title)
         lines_layout.addWidget(self._lines_table, 1)
-        lines_widget = QFrame()
-        lines_widget.setObjectName("linesPanel")
-        lines_widget.setLayout(lines_layout)
+        self._lines_widget = QFrame()
+        self._lines_widget.setObjectName("linesPanel")
+        self._lines_widget.setMinimumWidth(0)
+        self._lines_widget.setLayout(lines_layout)
 
         totals_form = QFormLayout()
         totals_form.setContentsMargins(18, 18, 18, 18)
@@ -257,22 +304,27 @@ class OrderDialog(QDialog):
         totals_form.addRow(t("Discount value"), self._discount_value_input)
         totals_form.addRow(QLabel(f"<b>{t('Total preview')}</b>"))
         totals_form.addRow(self._summary_widget)
-        totals_widget = QFrame()
-        totals_widget.setObjectName("totalsPanel")
-        totals_widget.setLayout(totals_form)
+        self._totals_widget = QFrame()
+        self._totals_widget.setObjectName("totalsPanel")
+        self._totals_widget.setMinimumWidth(0)
+        self._totals_widget.setLayout(totals_form)
 
-        workspace_layout = QGridLayout()
-        workspace_layout.setContentsMargins(18, 18, 18, 18)
-        workspace_layout.setSpacing(18)
-        workspace_layout.setColumnStretch(0, 2)
-        workspace_layout.setColumnStretch(1, 5)
-        workspace_layout.setColumnStretch(2, 2)
-        workspace_layout.addWidget(details_widget, 0, 0)
-        workspace_layout.addWidget(lines_widget, 0, 1)
-        workspace_layout.addWidget(totals_widget, 0, 2)
+        self._workspace_layout = QGridLayout()
+        self._workspace_layout.setSizeConstraint(QLayout.SetNoConstraint)
+        self._workspace_layout.setContentsMargins(18, 18, 18, 18)
+        self._workspace_layout.setSpacing(18)
+        self._workspace_layout.setColumnStretch(0, 2)
+        self._workspace_layout.setColumnStretch(1, 5)
+        self._workspace_layout.setColumnStretch(2, 2)
         workspace = QWidget()
         workspace.setObjectName("workspace")
-        workspace.setLayout(workspace_layout)
+        workspace.setLayout(self._workspace_layout)
+
+        self._scroll_area = QScrollArea()
+        self._scroll_area.setObjectName("orderScroll")
+        self._scroll_area.setWidgetResizable(True)
+        self._scroll_area.setFrameShape(QFrame.NoFrame)
+        self._scroll_area.setWidget(workspace)
 
         self._buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         translate_button_box(self._buttons)
@@ -280,18 +332,101 @@ class OrderDialog(QDialog):
         self._buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout()
+        layout.setSizeConstraint(QLayout.SetNoConstraint)
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(10)
-        layout.addWidget(workspace, 1)
+        layout.addWidget(self._scroll_area, 1)
         layout.addWidget(self._buttons)
         self.setLayout(layout)
+        self._sync_responsive_layout(force=True)
 
         self._refresh_lines_table()
         self._sync_discount_input_state()
         self._sync_deadline_constraints()
+        self._sync_button_widths()
 
         if self._order_id is not None:
             self._load_order()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "_workspace_layout"):
+            self._sync_responsive_layout()
+
+    def _sync_responsive_layout(self, *, force: bool = False) -> None:
+        single_column = self.width() < self._SINGLE_COLUMN_BREAKPOINT
+        if force or single_column != self._workspace_is_single_column:
+            self._workspace_is_single_column = single_column
+            self._arrange_workspace(single_column)
+
+        compact_composer = single_column
+        if force or compact_composer != self._composer_is_compact:
+            self._composer_is_compact = compact_composer
+            self._arrange_line_composer(compact_composer)
+
+    def _arrange_workspace(self, single_column: bool) -> None:
+        for widget in (self._details_widget, self._lines_widget, self._totals_widget):
+            self._workspace_layout.removeWidget(widget)
+
+        for column in range(3):
+            self._workspace_layout.setColumnStretch(column, 0)
+
+        if single_column:
+            self._workspace_layout.addWidget(self._details_widget, 0, 0)
+            self._workspace_layout.addWidget(self._lines_widget, 1, 0)
+            self._workspace_layout.addWidget(self._totals_widget, 2, 0)
+            self._workspace_layout.setColumnStretch(0, 1)
+            return
+
+        self._workspace_layout.addWidget(self._details_widget, 0, 0)
+        self._workspace_layout.addWidget(self._lines_widget, 0, 1)
+        self._workspace_layout.addWidget(self._totals_widget, 0, 2)
+        self._workspace_layout.setColumnStretch(0, 2)
+        self._workspace_layout.setColumnStretch(1, 5)
+        self._workspace_layout.setColumnStretch(2, 2)
+
+    def _arrange_line_composer(self, compact: bool) -> None:
+        while self._composer_fields_layout.count():
+            item = self._composer_fields_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(self._line_composer)
+
+        for column in range(8):
+            self._composer_fields_layout.setColumnStretch(column, 0)
+
+        if compact:
+            self._composer_fields_layout.addWidget(self._variant_display, 0, 0, 1, 3)
+            self._composer_fields_layout.addWidget(self._select_variant_button, 0, 3)
+            self._composer_fields_layout.addWidget(self._quantity_label, 1, 0)
+            self._composer_fields_layout.addWidget(self._quantity_input, 1, 1)
+            self._composer_fields_layout.addWidget(self._unit_price_label, 1, 2)
+            self._composer_fields_layout.addWidget(self._unit_price_input, 1, 3)
+            self._composer_fields_layout.addWidget(self._add_line_button, 2, 0, 1, 2)
+            self._composer_fields_layout.addWidget(self._cancel_line_edit_button, 2, 2, 1, 2)
+            self._composer_fields_layout.setColumnStretch(0, 0)
+            self._composer_fields_layout.setColumnStretch(2, 1)
+            return
+
+        self._composer_fields_layout.addWidget(self._variant_display, 0, 0)
+        self._composer_fields_layout.addWidget(self._select_variant_button, 0, 1)
+        self._composer_fields_layout.addWidget(self._quantity_label, 0, 2)
+        self._composer_fields_layout.addWidget(self._quantity_input, 0, 3)
+        self._composer_fields_layout.addWidget(self._unit_price_label, 0, 4)
+        self._composer_fields_layout.addWidget(self._unit_price_input, 0, 5)
+        self._composer_fields_layout.addWidget(self._add_line_button, 0, 6)
+        self._composer_fields_layout.addWidget(self._cancel_line_edit_button, 0, 7)
+        self._composer_fields_layout.setColumnStretch(0, 1)
+
+    def _sync_button_widths(self) -> None:
+        for button in (
+            self._select_customer_button,
+            self._select_variant_button,
+            self._add_line_button,
+            self._cancel_line_edit_button,
+        ):
+            width = button.fontMetrics().horizontalAdvance(button.text()) + 24
+            button.setMinimumWidth(max(button.minimumWidth(), width))
 
     def _open_customer_picker(self) -> None:
         if self._edit_capability != OrderEditCapability.FULL:
