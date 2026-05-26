@@ -177,7 +177,7 @@ class UpdateTaskService:
         series.monthly_day = data.monthly_day
         series.starts_on = data.due_date
         series.ends_on = data.ends_on
-        GenerateRecurringTasksService(self._session).execute(data.due_date)
+        self._regenerate_updated_series(data.due_date)
         return self._first_generated_occurrence(series.id, data.due_date)
 
     def _update_whole_series(self, task: Task, data: UpdateTaskInput) -> Task:
@@ -205,7 +205,7 @@ class UpdateTaskService:
         series.monthly_day = data.monthly_day
         series.starts_on = data.due_date
         series.ends_on = data.ends_on
-        GenerateRecurringTasksService(self._session).execute(data.due_date)
+        self._regenerate_updated_series(data.due_date)
         return self._first_generated_occurrence(series.id, data.due_date)
 
     def _update_existing_occurrence_snapshots(
@@ -244,6 +244,12 @@ class UpdateTaskService:
         if task is None:
             raise ValueError("Recurring task update did not generate the selected occurrence.")
         return task
+
+    def _regenerate_updated_series(self, from_day: date) -> None:
+        GenerateRecurringTasksService(self._session).execute(from_day)
+        today = date.today()
+        if today > from_day:
+            GenerateRecurringTasksService(self._session).execute(today)
 
     @staticmethod
     def _validate_series_fields(
