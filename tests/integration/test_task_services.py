@@ -35,7 +35,7 @@ from app.domain.enums import (
     TaskRecurrenceType,
     TaskSeriesUpdateScope,
 )
-from app.infrastructure.db.models import Task
+from app.infrastructure.db.models import Task, TaskSeries
 
 
 def create_customer(db_session):
@@ -216,6 +216,58 @@ def test_delete_task_service_deletes_future_recurring_occurrences(db_session):
         select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
     ).all()
     assert [task.id for task in remaining] == [first.id]
+    assert series.ends_on == first.due_date
+
+
+def test_delete_task_service_future_scope_prevents_regeneration(db_session):
+    series = CreateTaskSeriesService(db_session).execute(
+        CreateTaskSeriesInput(
+            title="Recurring",
+            recurrence_type=TaskRecurrenceType.DAILY,
+            starts_on=date(2026, 5, 11),
+            ends_on=date(2026, 5, 14),
+        )
+    )
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 11))
+    first, second, *_ = db_session.scalars(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    ).all()
+
+    DeleteTaskService(db_session).execute(second.id, TaskSeriesUpdateScope.FUTURE)
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 11))
+
+    persisted_series = db_session.get(TaskSeries, series.id)
+    remaining = db_session.scalars(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    ).all()
+    assert [task.id for task in remaining] == [first.id]
+    assert persisted_series is not None
+    assert persisted_series.ends_on == first.due_date
+
+
+def test_delete_task_service_future_scope_deactivates_series_from_first_occurrence(db_session):
+    series = CreateTaskSeriesService(db_session).execute(
+        CreateTaskSeriesInput(
+            title="Recurring",
+            recurrence_type=TaskRecurrenceType.DAILY,
+            starts_on=date(2026, 5, 11),
+            ends_on=date(2026, 5, 14),
+        )
+    )
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 11))
+    first = db_session.scalar(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    )
+
+    assert first is not None
+    DeleteTaskService(db_session).execute(first.id, TaskSeriesUpdateScope.FUTURE)
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 11))
+
+    persisted_series = db_session.get(TaskSeries, series.id)
+    remaining = db_session.scalars(select(Task).where(Task.task_series_id == series.id)).all()
+    assert remaining == []
+    assert persisted_series is not None
+    assert persisted_series.is_active is False
 
 
 def test_delete_task_service_rejects_whole_series_delete(db_session):

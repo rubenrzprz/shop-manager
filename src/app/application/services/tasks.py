@@ -102,10 +102,21 @@ class DeleteTaskService:
         self._session.flush()
 
     def _delete_future_occurrences(self, task: Task) -> None:
+        series = task.series
+        if series is None:
+            raise ValueError("Task is not part of a recurring series.")
+
+        cutoff_date = task.due_date
+        if cutoff_date <= series.starts_on:
+            series.is_active = False
+            series.ends_on = series.starts_on
+        else:
+            series.ends_on = cutoff_date - timedelta(days=1)
+
         tasks = self._session.scalars(
             select(Task)
             .where(Task.task_series_id == task.task_series_id)
-            .where(Task.due_date >= task.due_date)
+            .where(Task.due_date >= cutoff_date)
         ).all()
         for occurrence in tasks:
             self._session.delete(occurrence)
