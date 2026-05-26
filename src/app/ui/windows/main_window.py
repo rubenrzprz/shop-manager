@@ -40,7 +40,7 @@ class MainWindow(QMainWindow):
         self._dashboard_page.order_requested.connect(self._open_order_from_dashboard)
         self._dashboard_page.task_changed.connect(self._calendar_page.load_calendar)
         self._calendar_page.task_changed.connect(self._dashboard_page.load_tasks)
-        self._settings_page.language_changed.connect(lambda _language: self.retranslate_ui())
+        self._settings_page.language_changed.connect(self._handle_language_changed)
         self._orders_page.order_changed.connect(self._dashboard_page.reload_dashboard)
         self._orders_page.task_changed.connect(self._dashboard_page.load_tasks)
         self._orders_page.task_changed.connect(self._calendar_page.load_calendar)
@@ -82,6 +82,10 @@ class MainWindow(QMainWindow):
         for index, (marker, label) in enumerate(labels):
             self._tabs.setTabIcon(index, QIcon())
             self._tabs.setTabText(index, f"{marker} {label}")
+
+    def _handle_language_changed(self, _language: str) -> None:
+        self.retranslate_ui()
+        self._dashboard_page.reload_dashboard()
 
     def _set_tab_icons(self) -> None:
         for index in range(self._tabs.count()):
