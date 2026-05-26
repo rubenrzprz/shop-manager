@@ -3,10 +3,12 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QLabel,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -24,6 +26,7 @@ from app.domain.enums import OrderStatus
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialog_helpers import question
 from app.ui.localization import SUPPORTED_LANGUAGES, order_status_label, set_language, t
+from app.ui.page_chrome import apply_page_chrome, mark_primary_button
 
 
 class SettingsPage(QWidget):
@@ -59,9 +62,7 @@ class SettingsPage(QWidget):
         self._default_order_follow_up_description = QLabel()
         self._default_order_follow_up_description.setWordWrap(True)
         self._recalculate_follow_ups_button = QPushButton()
-        self._recalculate_follow_ups_button.clicked.connect(
-            self.recalculate_order_follow_ups
-        )
+        self._recalculate_follow_ups_button.clicked.connect(self.recalculate_order_follow_ups)
         self._strict_order_workflow_checkbox = QCheckBox()
         self._strict_order_workflow_description = QLabel()
         self._strict_order_workflow_description.setWordWrap(True)
@@ -89,6 +90,7 @@ class SettingsPage(QWidget):
         self._order_status_group.setLayout(order_status_layout)
 
         self._save_button = QPushButton()
+        mark_primary_button(self._save_button)
         self._save_button.clicked.connect(self.save_settings)
 
         self._form = QFormLayout()
@@ -102,17 +104,35 @@ class SettingsPage(QWidget):
             self._default_order_follow_up_input,
         )
 
+        content = QWidget()
+        content_layout = QVBoxLayout()
+        apply_page_chrome(content_layout)
+        content_layout.addWidget(self._title_label)
+        content_layout.addLayout(self._form)
+        content_layout.addWidget(self._task_generation_horizon_description)
+        content_layout.addWidget(self._default_order_follow_up_description)
+        content_layout.addWidget(self._recalculate_follow_ups_button)
+        content_layout.addWidget(self._strict_order_workflow_checkbox)
+        content_layout.addWidget(self._strict_order_workflow_description)
+        content_layout.addWidget(self._order_status_group)
+        content_layout.addStretch()
+        content.setLayout(content_layout)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setWidget(content)
+
+        footer = QWidget()
+        footer_layout = QVBoxLayout()
+        footer_layout.setContentsMargins(24, 0, 24, 24)
+        footer_layout.addWidget(self._save_button)
+        footer.setLayout(footer_layout)
+
         layout = QVBoxLayout()
-        layout.addWidget(self._title_label)
-        layout.addLayout(self._form)
-        layout.addWidget(self._task_generation_horizon_description)
-        layout.addWidget(self._default_order_follow_up_description)
-        layout.addWidget(self._recalculate_follow_ups_button)
-        layout.addWidget(self._strict_order_workflow_checkbox)
-        layout.addWidget(self._strict_order_workflow_description)
-        layout.addWidget(self._order_status_group)
-        layout.addWidget(self._save_button)
-        layout.addStretch()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(scroll_area)
+        layout.addWidget(footer)
         self.setLayout(layout)
 
         self.retranslate_ui()
@@ -244,9 +264,7 @@ class SettingsPage(QWidget):
             QMessageBox.information(
                 self,
                 t("Order follow-ups recalculated"),
-                t("{count} order follow-ups recalculated.").format(
-                    count=recalculated_count
-                ),
+                t("{count} order follow-ups recalculated.").format(count=recalculated_count),
             )
         except Exception as exc:
             session.rollback()

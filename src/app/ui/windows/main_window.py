@@ -1,3 +1,5 @@
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QMainWindow, QTabWidget
 
 from app.application.services.settings import ApplicationSettingsService
@@ -20,8 +22,12 @@ class MainWindow(QMainWindow):
         self._load_language()
         self.setWindowTitle(t("Shop Manager"))
         self.resize(1000, 600)
+        self.setWindowState(self.windowState() | Qt.WindowMaximized)
 
         self._tabs = QTabWidget()
+        self._tabs.tabBar().setExpanding(True)
+        self._tabs.tabBar().setUsesScrollButtons(True)
+        self._tabs.tabBar().setElideMode(Qt.ElideRight)
         self._dashboard_page = DashboardPage()
         self._calendar_page = CalendarPage()
         self._products_page = ProductsPage()
@@ -34,7 +40,7 @@ class MainWindow(QMainWindow):
         self._dashboard_page.order_requested.connect(self._open_order_from_dashboard)
         self._dashboard_page.task_changed.connect(self._calendar_page.load_calendar)
         self._calendar_page.task_changed.connect(self._dashboard_page.load_tasks)
-        self._settings_page.language_changed.connect(lambda _language: self.retranslate_ui())
+        self._settings_page.language_changed.connect(self._handle_language_changed)
         self._orders_page.order_changed.connect(self._dashboard_page.reload_dashboard)
         self._orders_page.task_changed.connect(self._dashboard_page.load_tasks)
         self._orders_page.task_changed.connect(self._calendar_page.load_calendar)
@@ -63,35 +69,50 @@ class MainWindow(QMainWindow):
         self._customers_page.retranslate_ui()
         self._orders_page.retranslate_ui()
         self._settings_page.retranslate_ui()
-        self._tabs.setTabText(0, t("Dashboard"))
-        self._tabs.setTabText(1, t("Calendar"))
-        self._tabs.setTabText(2, t("Products"))
-        self._tabs.setTabText(3, t("Categories"))
-        self._tabs.setTabText(4, t("Suppliers"))
-        self._tabs.setTabText(5, t("Customers"))
-        self._tabs.setTabText(6, t("Orders"))
-        self._tabs.setTabText(7, t("Settings"))
+        labels = [
+            ("🏠", t("Dashboard")),
+            ("📅", t("Calendar")),
+            ("📦", t("Products")),
+            ("🏷️", t("Categories")),
+            ("🚚", t("Suppliers")),
+            ("👤", t("Customers")),
+            ("🧾", t("Orders")),
+            ("⚙️", t("Settings")),
+        ]
+        for index, (marker, label) in enumerate(labels):
+            self._tabs.setTabIcon(index, QIcon())
+            self._tabs.setTabText(index, f"{marker} {label}")
+
+    def _handle_language_changed(self, _language: str) -> None:
+        self.retranslate_ui()
+        self._dashboard_page.reload_dashboard()
+
+    def _set_tab_icons(self) -> None:
+        for index in range(self._tabs.count()):
+            self._tabs.setTabIcon(index, QIcon())
 
     def _run_dashboard_action(self, action: str) -> None:
-        actions = {
-            "calendar": (1, None),
-            "new_product": (2, self._products_page.open_create_dialog),
-            "new_supplier": (4, self._suppliers_page.open_create_dialog),
-            "new_customer": (5, self._customers_page.open_create_dialog),
-            "new_order": (6, self._orders_page.open_create_dialog),
-            "settings": (7, None),
+        modal_actions = {
+            "new_product": self._products_page.open_create_dialog,
+            "new_supplier": self._suppliers_page.open_create_dialog,
+            "new_customer": self._customers_page.open_create_dialog,
+            "new_order": self._orders_page.open_create_dialog,
         }
-        action_config = actions.get(action)
-        if action_config is None:
+        modal_action = modal_actions.get(action)
+        if modal_action is not None:
+            modal_action()
             return
 
-        tab_index, callback = action_config
+        tab_actions = {
+            "calendar": 1,
+            "settings": 7,
+        }
+        tab_index = tab_actions.get(action)
+        if tab_index is None:
+            return
         self._tabs.setCurrentIndex(tab_index)
-        if callback is not None:
-            callback()
 
     def _open_order_from_dashboard(self, order_id: int) -> None:
-        self._tabs.setCurrentIndex(6)
         self._orders_page.open_order_for_edit(order_id)
 
     def _load_language(self) -> None:

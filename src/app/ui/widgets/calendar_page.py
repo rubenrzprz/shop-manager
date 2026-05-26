@@ -1,9 +1,12 @@
 from calendar import Calendar, month_name
 from datetime import date
+from html import escape as html_escape
 
-from PySide6.QtCore import QEvent, QObject, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
+from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QFrame,
     QGroupBox,
     QHeaderView,
@@ -26,15 +29,53 @@ from app.application.services.tasks import (
 )
 from app.infrastructure.db.session import SessionLocal
 from app.ui.dialogs.task_dialog import TaskDialog
-from app.ui.localization import t
+from app.ui.localization import format_date, t
 from app.ui.task_colors import task_background
 
 
 class CalendarPage(QWidget):
     task_changed = Signal()
+    _MAX_TASK_DESCRIPTION_CHARS = 120
 
     def __init__(self) -> None:
         super().__init__()
+        self._task_action_in_progress = False
+        self.setObjectName("calendarPage")
+        self.setStyleSheet(
+            """
+            QWidget#calendarPage {
+                background: #eef2f7;
+                color: #172033;
+            }
+            QWidget#calendarPage QScrollArea {
+                background: #eef2f7;
+                border: none;
+            }
+            QWidget#calendarPage QTableWidget#calendarTable {
+                background: #ffffff;
+                alternate-background-color: #ffffff;
+                border: 1px solid #cfd8e3;
+                border-radius: 12px;
+                gridline-color: #e5e7eb;
+                selection-background-color: transparent;
+                selection-color: #172033;
+            }
+            QWidget#calendarPage QTableWidget#calendarTable::item:selected {
+                background: transparent;
+                color: #172033;
+            }
+            QWidget#calendarPage QHeaderView::section {
+                background: #f3f6fa;
+                color: #526070;
+                border: 0;
+                border-bottom: 1px solid #d8dee8;
+                padding: 8px;
+            }
+            QLabel#emptyState {
+                color: #64748b;
+            }
+            """
+        )
 
         today = date.today()
         self._display_year = today.year
@@ -59,6 +100,7 @@ class CalendarPage(QWidget):
         self._refresh_button.clicked.connect(self.load_calendar)
 
         self._calendar_table = QTableWidget(6, 7)
+        self._calendar_table.setObjectName("calendarTable")
         self._calendar_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._calendar_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self._calendar_table.setSelectionBehavior(QAbstractItemView.SelectItems)
@@ -69,14 +111,31 @@ class CalendarPage(QWidget):
             self._calendar_table.setRowHeight(row, 104)
 
         self._selected_day_group = QGroupBox()
-        self._selected_day_group.setMinimumWidth(340)
-        self._selected_day_group.setMaximumWidth(460)
+        self._selected_day_group.setMinimumWidth(380)
+        self._selected_day_group.setMaximumWidth(620)
+        self._selected_day_group.setStyleSheet(
+            "QGroupBox { background: #ffffff; border: 1px solid #cfd8e3; "
+            "border-radius: 12px; padding: 14px; margin-top: 0; }"
+        )
+        self._selected_day_title = QLabel()
+        self._selected_day_title.setWordWrap(True)
+        self._selected_day_title.setStyleSheet(
+            "font-size: 15px; font-weight: 800; color: #111827; padding-bottom: 8px;"
+        )
         self._pending_label = QLabel()
         self._completed_label = QLabel()
+        section_style = "font-size: 13px; font-weight: 700; color: #374151; margin-top: 4px;"
+        self._pending_label.setStyleSheet(section_style)
+        self._completed_label.setStyleSheet(section_style)
         self._pending_tasks_layout = QVBoxLayout()
         self._completed_tasks_layout = QVBoxLayout()
+        self._pending_tasks_layout.setSpacing(8)
+        self._completed_tasks_layout.setSpacing(8)
 
         selected_day_layout = QVBoxLayout()
+        selected_day_layout.setContentsMargins(10, 14, 10, 10)
+        selected_day_layout.setSpacing(8)
+        selected_day_layout.addWidget(self._selected_day_title)
         selected_day_layout.addWidget(self._pending_label)
         selected_day_layout.addLayout(self._pending_tasks_layout)
         selected_day_layout.addWidget(self._completed_label)
@@ -85,8 +144,8 @@ class CalendarPage(QWidget):
         self._selected_day_group.setLayout(selected_day_layout)
 
         self._selected_day_scroll = QScrollArea()
-        self._selected_day_scroll.setMinimumWidth(360)
-        self._selected_day_scroll.setMaximumWidth(480)
+        self._selected_day_scroll.setMinimumWidth(400)
+        self._selected_day_scroll.setMaximumWidth(660)
         self._selected_day_scroll.setWidgetResizable(True)
         self._selected_day_scroll.setWidget(self._selected_day_group)
 
@@ -103,13 +162,13 @@ class CalendarPage(QWidget):
         layout.addWidget(self._title_label)
         layout.addLayout(header_layout)
         content_layout = QHBoxLayout()
-        content_layout.addWidget(self._selected_day_scroll)
+        content_layout.addWidget(self._selected_day_scroll, 0)
         content_layout.addWidget(self._calendar_table, 1)
         layout.addLayout(content_layout, 1)
         self.setLayout(layout)
 
         self.retranslate_ui()
-        self.load_calendar()
+        QTimer.singleShot(0, self.load_calendar)
 
     def retranslate_ui(self) -> None:
         self._title_label.setText(t("Calendar"))
@@ -215,7 +274,6 @@ class CalendarPage(QWidget):
         for task in tasks[:2]:
             task_label = QLabel(self._task_title(task))
             self._register_calendar_click_target(task_label, day)
-            task_label.setToolTip(self._task_detail_label(task))
             task_label.setFixedHeight(18)
             task_label.setTextFormat(Qt.PlainText)
             task_label.setStyleSheet(self._task_block_style(task))
@@ -255,6 +313,8 @@ class CalendarPage(QWidget):
         if event.type() == QEvent.Type.MouseButtonPress:
             task_id = source.property("calendarTaskId")
             if task_id is not None:
+                if self._task_action_in_progress or self._cursor_is_on_button():
+                    return False
                 self._open_task_edit_dialog(int(task_id))
                 return True
             ordinal = source.property("calendarDayOrdinal")
@@ -262,6 +322,15 @@ class CalendarPage(QWidget):
                 self._select_day(date.fromordinal(int(ordinal)))
                 return True
         return super().eventFilter(source, event)
+
+    @staticmethod
+    def _cursor_is_on_button() -> bool:
+        widget = QApplication.widgetAt(QCursor.pos())
+        while widget is not None:
+            if isinstance(widget, QPushButton):
+                return True
+            widget = widget.parentWidget()
+        return False
 
     def _load_selected_day_tasks(self) -> None:
         try:
@@ -276,14 +345,11 @@ class CalendarPage(QWidget):
                 self._selected_day,
             )
             selected_day_tasks = task_days[0].tasks if task_days else []
-            pending_tasks = [
-                task for task in selected_day_tasks if task.completed_at is None
-            ]
-            completed_tasks = [
-                task for task in selected_day_tasks if task.completed_at is not None
-            ]
-            self._selected_day_group.setTitle(
-                f"{t('Tasks for')} {self._selected_day.isoformat()}"
+            pending_tasks = [task for task in selected_day_tasks if task.completed_at is None]
+            completed_tasks = [task for task in selected_day_tasks if task.completed_at is not None]
+            self._selected_day_group.setTitle("")
+            self._selected_day_title.setText(
+                f"{t('Tasks for')} {format_date(self._selected_day)}"
             )
             self._pending_label.setText(t("Pending tasks"))
             self._completed_label.setText(t("Completed tasks"))
@@ -323,14 +389,24 @@ class CalendarPage(QWidget):
 
         for task in tasks:
             row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(8)
+
             label = QLabel(self._task_detail_label(task))
             self._register_task_click_target(label, task)
+            label.setTextFormat(Qt.RichText)
             label.setWordWrap(True)
             label.setStyleSheet(self._task_detail_style(task))
-            button = QPushButton(action_label)
+
+            button = QPushButton("↶" if task.completed_at is not None else "✓")
+            button.setFixedSize(38, 38)
+            button.setMinimumSize(38, 38)
+            button.setMaximumSize(38, 38)
+            button.setStyleSheet(self._task_action_button_stylesheet(task))
             button.clicked.connect(lambda _checked=False, task_id=task.id: action(task_id))
+
             row.addWidget(label, 1)
-            row.addWidget(button)
+            row.addWidget(button, 0, Qt.AlignRight | Qt.AlignTop)
             layout.addLayout(row)
 
     def _register_task_click_target(self, widget: QWidget, task: TaskListItem) -> None:
@@ -340,6 +416,30 @@ class CalendarPage(QWidget):
         widget.setProperty("calendarTaskId", task.id)
         widget.setCursor(Qt.PointingHandCursor)
         widget.installEventFilter(self)
+
+    @staticmethod
+    def _task_action_button_stylesheet(task: TaskListItem) -> str:
+        if task.completed_at is not None:
+            border = "#bbf7d0"
+            foreground = "#166534"
+        elif task.is_auto_order_follow_up:
+            border = "#c4b5fd"
+            foreground = "#4c1d95"
+        else:
+            border = task.color_hex
+            foreground = "#111827"
+
+        return (
+            "QPushButton { "
+            "background: #ffffff; "
+            f"color: {foreground}; "
+            f"border: 1px solid {border}; "
+            "min-width: 38px; max-width: 38px; min-height: 38px; max-height: 38px; "
+            "border-radius: 19px; padding: 0; font-size: 17px; font-weight: 800; "
+            "}"
+            "QPushButton:hover { background: #f8fafc; border-color: #94a3b8; }"
+            "QPushButton:pressed { background: #eef2f7; }"
+        )
 
     def _open_task_dialog(self) -> None:
         dialog = TaskDialog(self, default_due_date=self._selected_day)
@@ -360,9 +460,12 @@ class CalendarPage(QWidget):
         self._change_task_completion(task_id, complete=False)
 
     def _change_task_completion(self, task_id: int, complete: bool) -> None:
+        self._task_action_in_progress = True
+        task_updated = False
         try:
             session = SessionLocal()
         except Exception as exc:
+            self._task_action_in_progress = False
             QMessageBox.critical(self, t("Could not update task"), str(exc))
             return
 
@@ -372,13 +475,24 @@ class CalendarPage(QWidget):
             else:
                 ReopenTaskService(session).execute(task_id)
             session.commit()
-            self.load_calendar()
-            self.task_changed.emit()
+            task_updated = True
         except Exception as exc:
             session.rollback()
             QMessageBox.critical(self, t("Could not update task"), t(str(exc)))
         finally:
             session.close()
+            if task_updated:
+                QTimer.singleShot(0, self._finish_task_completion_update)
+            else:
+                QTimer.singleShot(0, self._clear_task_action_in_progress)
+
+    def _finish_task_completion_update(self) -> None:
+        self.load_calendar()
+        self.task_changed.emit()
+        self._clear_task_action_in_progress()
+
+    def _clear_task_action_in_progress(self) -> None:
+        self._task_action_in_progress = False
 
     def _show_previous_month(self) -> None:
         if self._display_month == 1:
@@ -432,19 +546,38 @@ class CalendarPage(QWidget):
 
     @classmethod
     def _task_detail_label(cls, task: TaskListItem) -> str:
-        title = cls._task_title(task)
-        if task.notes:
-            notes = t(task.notes) if task.is_auto_order_follow_up else task.notes
-            return f"{title} ({notes})"
+        title = html_escape(cls._task_title(task))
+        description = cls._task_description(task)
+        if description:
+            description_text = html_escape(cls._shorten_task_text(description))
+            return (
+                f"<span style='font-weight:650; color:#111827;'>{title}</span>"
+                f"<br><span style='color:#475569;'>{description_text}</span>"
+            )
 
-        return title
+        return f"<span style='font-weight:650; color:#111827;'>{title}</span>"
+
+    @classmethod
+    def _shorten_task_text(cls, text: str) -> str:
+        normalized = " ".join(text.split())
+        if len(normalized) <= cls._MAX_TASK_DESCRIPTION_CHARS:
+            return normalized
+
+        return normalized[: cls._MAX_TASK_DESCRIPTION_CHARS - 3].rstrip() + "..."
+
+    @staticmethod
+    def _task_description(task: TaskListItem) -> str | None:
+        if task.notes:
+            return t(task.notes) if task.is_auto_order_follow_up else task.notes
+
+        return None
 
     @staticmethod
     def _task_block_style(task: TaskListItem) -> str:
         if task.completed_at is not None:
             return (
-                "background: #e5e7eb; color: #374151; border-left: 4px solid #6b7280; "
-                "border-radius: 3px; padding: 1px 4px;"
+                "background: #ecfdf3; color: #37513d; border-left: 4px solid #86efac; "
+                "border-radius: 3px; padding: 1px 4px; text-decoration: line-through;"
             )
         if task.is_auto_order_follow_up:
             return (

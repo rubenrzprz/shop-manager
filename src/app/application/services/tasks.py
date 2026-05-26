@@ -102,10 +102,21 @@ class DeleteTaskService:
         self._session.flush()
 
     def _delete_future_occurrences(self, task: Task) -> None:
+        series = task.series
+        if series is None:
+            raise ValueError("Task is not part of a recurring series.")
+
+        cutoff_date = task.due_date
+        if cutoff_date <= series.starts_on:
+            series.is_active = False
+            series.ends_on = series.starts_on
+        else:
+            series.ends_on = cutoff_date - timedelta(days=1)
+
         tasks = self._session.scalars(
             select(Task)
             .where(Task.task_series_id == task.task_series_id)
-            .where(Task.due_date >= task.due_date)
+            .where(Task.due_date >= cutoff_date)
         ).all()
         for occurrence in tasks:
             self._session.delete(occurrence)
@@ -166,8 +177,8 @@ class UpdateTaskService:
         series.monthly_day = data.monthly_day
         series.starts_on = data.due_date
         series.ends_on = data.ends_on
-        GenerateRecurringTasksService(self._session).execute(date.today())
-        return self._first_generated_occurrence(series.id, max(date.today(), data.due_date))
+        self._regenerate_updated_series(data.due_date)
+        return self._first_generated_occurrence(series.id, data.due_date)
 
     def _update_whole_series(self, task: Task, data: UpdateTaskInput) -> Task:
         series = task.series
@@ -194,8 +205,8 @@ class UpdateTaskService:
         series.monthly_day = data.monthly_day
         series.starts_on = data.due_date
         series.ends_on = data.ends_on
-        GenerateRecurringTasksService(self._session).execute(date.today())
-        return self._first_generated_occurrence(series.id, max(date.today(), data.due_date))
+        self._regenerate_updated_series(data.due_date)
+        return self._first_generated_occurrence(series.id, data.due_date)
 
     def _update_existing_occurrence_snapshots(
         self,
@@ -233,6 +244,12 @@ class UpdateTaskService:
         if task is None:
             raise ValueError("Recurring task update did not generate the selected occurrence.")
         return task
+
+    def _regenerate_updated_series(self, from_day: date) -> None:
+        GenerateRecurringTasksService(self._session).execute(from_day)
+        today = date.today()
+        if today > from_day:
+            GenerateRecurringTasksService(self._session).execute(today)
 
     @staticmethod
     def _validate_series_fields(

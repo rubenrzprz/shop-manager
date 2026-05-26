@@ -62,6 +62,8 @@ class ProductVariantDialog(QDialog):
         form.addRow(t("Price override"), self._price_override_input)
         form.addRow(t("Current stock"), self._stock_current_input)
         form.addRow(t("Minimum stock"), self._stock_minimum_input)
+        form.setRowVisible(self._stock_current_input, False)
+        form.setRowVisible(self._stock_minimum_input, False)
         if variant is None:
             form.addRow("", self._is_active_checkbox)
         form.addRow(t("Description"), self._description_input)

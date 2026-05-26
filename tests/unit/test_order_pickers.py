@@ -364,3 +364,103 @@ def test_order_dialog_builds_update_line_inputs_with_existing_ids_and_notes():
     assert lines[0].order_line_id == 7
     assert lines[0].product_variant_id == 11
     assert lines[0].notes == "Existing note"
+
+
+def test_order_dialog_updates_line_quantity_and_recalculates_subtotal():
+    dialog = OrderDialog.__new__(OrderDialog)
+    dialog._line_items = [
+        _OrderLineItem(
+            order_line_id=7,
+            product_variant_id=11,
+            product_name="Traditional Shirt",
+            sku="SHIRT-001",
+            quantity=2,
+            unit_price=Decimal("10.00"),
+            notes=None,
+        )
+    ]
+    subtotal_text = []
+
+    class FakeTable:
+        def item(self, row, column):
+            assert (row, column) == (0, 5)
+            return self
+
+        def setText(self, value):
+            subtotal_text.append(value)
+
+    dialog._lines_table = FakeTable()
+    dialog._sync_discount_input_state = lambda: None
+    dialog._sync_total_preview = lambda: None
+
+    dialog._update_line_quantity(0, 4)
+
+    assert dialog._line_items[0].quantity == 4
+    assert subtotal_text == ["40.00"]
+
+
+def test_order_dialog_updates_line_notes():
+    dialog = OrderDialog.__new__(OrderDialog)
+    dialog._line_items = [
+        _OrderLineItem(
+            order_line_id=7,
+            product_variant_id=11,
+            product_name="Traditional Shirt",
+            sku="SHIRT-001",
+            quantity=2,
+            unit_price=Decimal("10.00"),
+            notes="Existing note",
+        )
+    ]
+
+    dialog._update_line_notes(0, "  Gift wrap  ")
+
+    assert dialog._line_items[0].notes == "Gift wrap"
+
+    dialog._update_line_notes(0, "   ")
+
+    assert dialog._line_items[0].notes is None
+
+
+def test_order_dialog_applies_composer_changes_to_selected_line():
+    dialog = OrderDialog.__new__(OrderDialog)
+    dialog._editing_line_index = 0
+    dialog._selected_line_variant = None
+    dialog._line_items = [
+        _OrderLineItem(
+            order_line_id=7,
+            product_variant_id=11,
+            product_name="Traditional Shirt",
+            sku="SHIRT-001",
+            quantity=2,
+            unit_price=Decimal("10.00"),
+            notes="Existing note",
+        )
+    ]
+
+    class FakeQuantityInput:
+        def value(self):
+            return 4
+
+    class FakeUnitPriceInput:
+        def value(self):
+            return 12.5
+
+    class FakeNotesInput:
+        def text(self):
+            return "  Gift wrap  "
+
+    dialog._quantity_input = FakeQuantityInput()
+    dialog._unit_price_input = FakeUnitPriceInput()
+    dialog._line_notes_input = FakeNotesInput()
+    dialog._clear_line_composer = lambda: None
+    dialog._refresh_lines_table = lambda: None
+    dialog._sync_discount_input_state = lambda: None
+    dialog._sync_total_preview = lambda: None
+
+    dialog._apply_line_composer_to_selected_line()
+
+    assert dialog._line_items[0].quantity == 4
+    assert dialog._line_items[0].unit_price == Decimal("12.5")
+    assert dialog._line_items[0].notes == "Gift wrap"
+    assert dialog._line_items[0].order_line_id == 7

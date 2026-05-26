@@ -39,6 +39,7 @@ from app.infrastructure.db.session import SessionLocal
 from app.ui.date_edit import AppDateEdit
 from app.ui.dialog_helpers import translate_button_box
 from app.ui.localization import t
+from app.ui.window_sizing import resize_to_available_screen
 
 
 class TaskDialog(QDialog):
@@ -76,10 +77,16 @@ class TaskDialog(QDialog):
         self._loaded_task_series_id: int | None = None
         self._selected_color_hex = DEFAULT_TASK_COLOR_HEX
         self.setWindowTitle(self._window_title())
-        self.resize(460, 360)
+        resize_to_available_screen(
+            self,
+            width_ratio=0.42,
+            height_ratio=0.72,
+            min_width=520,
+            min_height=520,
+        )
 
         self._title_input = QLineEdit()
-        self._due_date_input = AppDateEdit()
+        self._due_date_input = AppDateEdit(self)
         due_date = default_due_date or date.today()
         self._due_date_input.setDate(QDate(due_date.year, due_date.month, due_date.day))
         self._notes_input = QPlainTextEdit()
@@ -118,7 +125,7 @@ class TaskDialog(QDialog):
         self._monthly_day_input.setMaximum(31)
         self._monthly_day_input.setValue(due_date.day)
         self._ends_on_checkbox = QCheckBox()
-        self._ends_on_input = AppDateEdit()
+        self._ends_on_input = AppDateEdit(self)
         self._ends_on_input.setDate(self._due_date_input.date())
         self._update_scope_input = QComboBox()
         self._update_scope_input.addItem(t("This task only"), TaskSeriesUpdateScope.OCCURRENCE)
@@ -136,10 +143,14 @@ class TaskDialog(QDialog):
         form = QFormLayout()
         self._form = form
         if self._order_id is not None:
-            order_label = QLabel(default_order_label or str(self._order_id))
-            order_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            order_label.setMinimumHeight(self._title_input.sizeHint().height())
-            form.addRow(t("Order"), order_label)
+            order_display = QLineEdit(default_order_label or str(self._order_id))
+            order_display.setReadOnly(True)
+            order_display.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            order_display.setMinimumHeight(self._title_input.sizeHint().height())
+            order_display.setStyleSheet(
+                "QLineEdit { background: #f8fafc; color: #334155; font-weight: 600; }"
+            )
+            form.addRow(t("Order"), order_display)
         form.addRow(t("Title"), self._title_input)
         form.addRow(t("Due date"), self._due_date_input)
         form.addRow(t("Color"), self._color_input)
@@ -197,7 +208,9 @@ class TaskDialog(QDialog):
             self._title_input.setText(task.title)
             self._notes_input.setPlainText(task.notes or "")
             self._set_combo_value(self._color_input, task.color_hex)
-            self._due_date_input.setDate(QDate(task.due_date.year, task.due_date.month, task.due_date.day))
+            self._due_date_input.setDate(
+                QDate(task.due_date.year, task.due_date.month, task.due_date.day)
+            )
             if task.task_series_id is not None:
                 self._set_combo_value(self._recurrence_type_input, task.recurrence_type)
                 self._recurrence_interval_input.setValue(task.recurrence_interval or 1)
@@ -244,10 +257,7 @@ class TaskDialog(QDialog):
         self._monthly_day_input.setEnabled(monthly_day_visible)
         self._ends_on_checkbox.setEnabled(recurring_enabled)
         self._ends_on_input.setEnabled(recurring_enabled and self._ends_on_checkbox.isChecked())
-        show_recurring_controls = (
-            self._task_id is None
-            or self._loaded_task_series_id is not None
-        )
+        show_recurring_controls = self._task_id is None or self._loaded_task_series_id is not None
         self._recurrence_interval_input.setVisible(show_recurring_controls)
         self._recurrence_type_input.setVisible(show_recurring_controls)
         self._monthly_rule_input.setVisible(show_recurring_controls)
@@ -383,9 +393,7 @@ class TaskDialog(QDialog):
             message_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             message_box.setDefaultButton(QMessageBox.No)
             return (
-                TaskSeriesUpdateScope.OCCURRENCE
-                if message_box.exec() == QMessageBox.Yes
-                else None
+                TaskSeriesUpdateScope.OCCURRENCE if message_box.exec() == QMessageBox.Yes else None
             )
 
         message_box = QMessageBox(self)

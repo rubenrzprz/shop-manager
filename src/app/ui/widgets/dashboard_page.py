@@ -1,7 +1,10 @@
 from datetime import date, datetime, timedelta
+from html import escape as html_escape
 
-from PySide6.QtCore import QDate, QEvent, QObject, Qt, Signal
+from PySide6.QtCore import QDate, QEvent, QObject, Qt, QTimer, Signal
+from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
+    QApplication,
     QCalendarWidget,
     QFrame,
     QGridLayout,
@@ -30,9 +33,8 @@ from app.application.services.tasks import (
 )
 from app.domain.enums import OrderStatus
 from app.infrastructure.db.session import SessionLocal
-from app.ui.date_edit import AppDateEdit
 from app.ui.dialogs.task_dialog import TaskDialog
-from app.ui.localization import order_status_label, t
+from app.ui.localization import format_date, order_status_label, t
 from app.ui.task_colors import task_background
 
 
@@ -40,27 +42,29 @@ class DashboardPage(QWidget):
     action_requested = Signal(str)
     order_requested = Signal(int)
     task_changed = Signal()
+    _MAX_TASK_DESCRIPTION_CHARS = 120
 
     def __init__(self) -> None:
         super().__init__()
+        self._task_action_in_progress = False
 
         self._title_label = QLabel()
         self._title_label.setObjectName("pageTitle")
 
         self._shortcuts_title_label = self._section_title()
-        self._products_button = self._shortcut_button("📦", "new_product", "#eff6ff", "#1e3a8a")
-        self._orders_button = self._shortcut_button("🧾", "new_order", "#fef2f2", "#7f1d1d")
-        self._customers_button = self._shortcut_button("👤", "new_customer", "#fffbeb", "#78350f")
-        self._suppliers_button = self._shortcut_button("🤝", "new_supplier", "#f0fdf4", "#14532d")
-        self._tasks_button = self._shortcut_button("✓", "new_task", "#f5f3ff", "#312e81")
-        self._calendar_button = self._shortcut_button("📅", "calendar", "#ecfeff", "#164e63")
-        self._settings_button = self._shortcut_button("⚙", "settings", "#f9fafb", "#374151")
+        self._products_button = self._shortcut_button("📦", "new_product", "#dbeafe", "#1d4ed8")
+        self._orders_button = self._shortcut_button("🧾", "new_order", "#fee2e2", "#b91c1c")
+        self._customers_button = self._shortcut_button("👤", "new_customer", "#fef3c7", "#b45309")
+        self._suppliers_button = self._shortcut_button("🤝", "new_supplier", "#dcfce7", "#15803d")
+        self._tasks_button = self._shortcut_button("✓", "new_task", "#ede9fe", "#6d28d9")
+        self._calendar_button = self._shortcut_button("📅", "calendar", "#cffafe", "#0891b2")
+        self._settings_button = self._shortcut_button("⚙", "settings", "#e2e8f0", "#334155")
 
         left_layout = QVBoxLayout()
         left_layout.setContentsMargins(0, 0, 18, 0)
-        left_layout.setSpacing(12)
+        left_layout.setSpacing(14)
         left_layout.addWidget(self._shortcuts_title_label)
-        left_layout.addStretch()
+        left_layout.addSpacing(20)
         left_layout.addWidget(self._products_button)
         left_layout.addWidget(self._orders_button)
         left_layout.addWidget(self._customers_button)
@@ -99,14 +103,15 @@ class DashboardPage(QWidget):
         middle_layout.addLayout(self._recent_orders_layout)
         middle_layout.addStretch()
         middle_content = QWidget()
+        middle_content.setObjectName("summaryContent")
         middle_content.setLayout(middle_layout)
-        middle_content.setStyleSheet("QWidget { background: #f7f8fa; }")
+        middle_content.setStyleSheet("QWidget#summaryContent { background: #eef2f7; }")
 
         middle_scroll = QScrollArea()
         middle_scroll.setWidgetResizable(True)
         middle_scroll.setFrameShape(QFrame.NoFrame)
         middle_scroll.setWidget(middle_content)
-        middle_scroll.setStyleSheet("QScrollArea { background: #f7f8fa; }")
+        middle_scroll.setStyleSheet("QScrollArea { background: #eef2f7; border: none; }")
 
         middle_column_layout = QVBoxLayout()
         middle_column_layout.setContentsMargins(10, 0, 10, 0)
@@ -114,16 +119,12 @@ class DashboardPage(QWidget):
         middle_column = QFrame()
         middle_column.setObjectName("summaryColumn")
         middle_column.setLayout(middle_column_layout)
-        middle_column.setStyleSheet("QFrame#summaryColumn { background: #f7f8fa; }")
+        middle_column.setStyleSheet("QFrame#summaryColumn { background: #eef2f7; }")
 
         self._tasks_title_label = self._section_title()
-        self._selected_date_input = AppDateEdit()
-        self._selected_date_input.setVisible(False)
+        self._selected_date_value = date.today()
         self._selected_date_button = self._date_button("")
         self._selected_date_button.clicked.connect(self._open_date_selector)
-        today = date.today()
-        self._selected_date_input.setDate(QDate(today.year, today.month, today.day))
-        self._selected_date_input.dateChanged.connect(self.load_tasks)
         self._previous_day_button = self._date_button("<")
         self._previous_day_button.clicked.connect(lambda: self._move_selected_day(-1))
         self._next_day_button = self._date_button(">")
@@ -151,7 +152,8 @@ class DashboardPage(QWidget):
         task_date_layout.addWidget(self._add_task_button)
 
         tasks_content = QWidget()
-        tasks_content.setStyleSheet("QWidget { background: #ffffff; }")
+        tasks_content.setObjectName("tasksContent")
+        tasks_content.setStyleSheet("QWidget#tasksContent { background: #eef2f7; }")
         tasks_layout = QVBoxLayout()
         tasks_layout.setContentsMargins(0, 0, 0, 0)
         tasks_layout.setSpacing(12)
@@ -170,18 +172,22 @@ class DashboardPage(QWidget):
         tasks_scroll.setWidgetResizable(True)
         tasks_scroll.setFrameShape(QFrame.NoFrame)
         tasks_scroll.setWidget(tasks_content)
-        tasks_scroll.setStyleSheet("QScrollArea { background: #ffffff; border: none; }")
+        tasks_scroll.setStyleSheet("QScrollArea { background: #eef2f7; border: none; }")
 
         right_layout = QVBoxLayout()
         right_layout.setContentsMargins(12, 0, 0, 0)
         right_layout.addWidget(tasks_scroll)
         right_column = QWidget()
+        right_column.setObjectName("tasksColumn")
+        right_column.setStyleSheet("QWidget#tasksColumn { background: #eef2f7; }")
         right_column.setLayout(right_layout)
 
         content_layout = QHBoxLayout()
-        content_layout.setSpacing(0)
+        content_layout.setSpacing(12)
         content_layout.addWidget(left_column, 1)
+        content_layout.addWidget(self._column_separator())
         content_layout.addWidget(middle_column, 1)
+        content_layout.addWidget(self._column_separator())
         content_layout.addWidget(right_column, 1)
 
         layout = QVBoxLayout()
@@ -190,6 +196,7 @@ class DashboardPage(QWidget):
         self.setLayout(layout)
 
         self.retranslate_ui()
+        QTimer.singleShot(0, self._load_dashboard)
 
     def retranslate_ui(self) -> None:
         self._title_label.setText(t("Dashboard"))
@@ -216,7 +223,6 @@ class DashboardPage(QWidget):
         self._overdue_label.setText(t("Overdue"))
         self._pending_label.setText(t("Pending tasks"))
         self._completed_label.setText(t("Completed tasks"))
-        self._load_dashboard()
 
     def load_tasks(self, *_args) -> None:
         self._sync_selected_date_button()
@@ -300,15 +306,15 @@ class DashboardPage(QWidget):
         foreground: str,
     ) -> QPushButton:
         button = QPushButton()
-        button.setMinimumHeight(48)
+        button.setMinimumHeight(74)
         button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         button.setStyleSheet(
             "QPushButton { "
             f"background: {background}; color: {foreground}; "
-            "border: 1px solid rgba(15, 23, 42, 0.08); border-radius: 20px; "
-            "padding: 10px 14px; text-align: left; font-weight: 650; "
+            "border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 18px; "
+            "font-size: 17px; padding: 14px 18px; text-align: center; font-weight: 850; "
             "} "
-            "QPushButton:hover { border: 1px solid rgba(15, 23, 42, 0.22); }"
+            "QPushButton:hover { border: 1px solid rgba(15, 23, 42, 0.28); }"
         )
         if action == "new_task":
             button.clicked.connect(self._open_task_dialog)
@@ -331,26 +337,40 @@ class DashboardPage(QWidget):
     def _open_date_selector(self) -> None:
         menu = QMenu(self)
         calendar = QCalendarWidget()
-        calendar.setSelectedDate(self._selected_date_input.date())
+        selected_day = self._selected_date()
+        calendar.setSelectedDate(QDate(selected_day.year, selected_day.month, selected_day.day))
         action = QWidgetAction(menu)
         action.setDefaultWidget(calendar)
         menu.addAction(action)
         calendar.clicked.connect(
             lambda selected_date: self._set_date_from_calendar(menu, selected_date)
         )
-        menu.exec(self._selected_date_button.mapToGlobal(self._selected_date_button.rect().bottomLeft()))
+        menu.exec(
+            self._selected_date_button.mapToGlobal(self._selected_date_button.rect().bottomLeft())
+        )
 
     def _set_date_from_calendar(self, menu: QMenu, selected_date: QDate) -> None:
-        self._selected_date_input.setDate(selected_date)
         menu.close()
+        self._set_selected_date(selected_date.toPython())
 
     def _sync_selected_date_button(self) -> None:
-        self._selected_date_button.setText(self._selected_date().isoformat())
+        self._selected_date_button.setText(format_date(self._selected_date()))
 
     def _section_title(self) -> QLabel:
         label = QLabel()
-        label.setStyleSheet("font-size: 16px; font-weight: 700; color: #111827;")
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet(
+            "font-size: 19px; font-weight: 800; color: #111827; padding: 8px 0 12px 0;"
+        )
         return label
+
+    @staticmethod
+    def _column_separator() -> QFrame:
+        separator = QFrame()
+        separator.setFrameShape(QFrame.VLine)
+        separator.setFixedWidth(1)
+        separator.setStyleSheet("background: #cfd8e3; border: 0;")
+        return separator
 
     def _subsection_title(self) -> QLabel:
         label = QLabel()
@@ -412,11 +432,22 @@ class DashboardPage(QWidget):
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.addWidget(title, 1)
         header_layout.addWidget(badge, 0, Qt.AlignTop)
+        add_task_button = QPushButton("+")
+        add_task_button.setFixedSize(30, 30)
+        add_task_button.setStyleSheet(
+            "QPushButton { background: #ffffff; border: 1px solid #d8dee8; "
+            "border-radius: 15px; color: #172033; font-weight: 800; padding: 0; }"
+            "QPushButton:hover { background: #eef2ff; border-color: #93c5fd; }"
+        )
+        add_task_button.clicked.connect(
+            lambda _checked=False, item=order: self._open_order_task_dialog(item)
+        )
+        header_layout.addWidget(add_task_button, 0, Qt.AlignTop)
         detail_parts = [order_status_label(order.status), f"{t('Total')}: {order.total_amount}"]
         if include_deadline and order.deadline is not None:
-            detail_parts.insert(0, f"{t('Deadline')}: {order.deadline.isoformat()}")
+            detail_parts.insert(0, f"{t('Deadline')}: {format_date(order.deadline)}")
         else:
-            detail_parts.insert(0, f"{t('Order date')}: {order.order_date.isoformat()}")
+            detail_parts.insert(0, f"{t('Order date')}: {format_date(order.order_date)}")
         detail = QLabel("  ·  ".join(detail_parts))
         self._register_order_click_target(detail, order.id)
         detail.setWordWrap(True)
@@ -441,9 +472,20 @@ class DashboardPage(QWidget):
                 return True
             task_id = source.property("dashboardTaskId")
             if task_id is not None:
+                if self._task_action_in_progress or self._cursor_is_on_button():
+                    return False
                 self._open_task_edit_dialog(int(task_id))
                 return True
         return super().eventFilter(source, event)
+
+    @staticmethod
+    def _cursor_is_on_button() -> bool:
+        widget = QApplication.widgetAt(QCursor.pos())
+        while widget is not None:
+            if isinstance(widget, QPushButton):
+                return True
+            widget = widget.parentWidget()
+        return False
 
     def _populate_task_section(
         self,
@@ -473,7 +515,10 @@ class DashboardPage(QWidget):
         section: str,
     ) -> QFrame:
         frame = QFrame()
-        background, border, icon = self._task_row_treatment(task, section)
+        background, border, marker, marker_color, completed = self._task_row_treatment(
+            task,
+            section,
+        )
         frame.setObjectName("taskRow")
         self._register_task_click_target(frame, task)
         frame.setStyleSheet(
@@ -481,40 +526,66 @@ class DashboardPage(QWidget):
             "border-radius: 16px; }}"
             "QFrame#taskRow QLabel { background: transparent; }"
         )
-        icon_label = QLabel(icon)
-        self._register_task_click_target(icon_label, task)
-        icon_label.setFixedWidth(24)
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet("font-size: 18px;")
+
+        marker_label = QLabel(marker)
+        self._register_task_click_target(marker_label, task)
+        marker_label.setFixedWidth(24)
+        marker_label.setAlignment(Qt.AlignCenter)
+        marker_label.setStyleSheet(
+            f"font-size: 18px; font-weight: 800; color: {marker_color};"
+        )
+
         title_label = QLabel(self._task_title(task))
         self._register_task_click_target(title_label, task)
         title_label.setWordWrap(True)
-        title_label.setStyleSheet("font-weight: 650; color: #111827;")
+        title_label.setStyleSheet(
+            "font-weight: 650; color: #111827;"
+            + (" text-decoration: line-through;" if completed else "")
+        )
+
         meta_label = QLabel(self._task_meta(task))
         self._register_task_click_target(meta_label, task)
+        meta_label.setTextFormat(Qt.RichText)
         meta_label.setWordWrap(True)
-        meta_label.setStyleSheet("color: #6b7280;")
-        button = QPushButton(action_label)
-        button.setMinimumHeight(30)
-        button.setStyleSheet(
-            "QPushButton { background: #f9fafb; border: 1px solid #e5e7eb; "
-            "border-radius: 10px; padding: 4px 8px; }"
-            "QPushButton:hover { background: #f3f4f6; }"
+        meta_label.setStyleSheet(
+            "color: #6b7280;" + (" text-decoration: line-through;" if completed else "")
         )
+
+        button = QPushButton("↶" if completed else "✓")
+        button.setFixedSize(38, 38)
+        button.setMinimumSize(38, 38)
+        button.setMaximumSize(38, 38)
+        button.setStyleSheet(self._task_action_button_stylesheet(border, marker_color))
         button.clicked.connect(lambda _checked=False, task_id=task.id: action(task_id))
+
         text_layout = QVBoxLayout()
         text_layout.setContentsMargins(0, 0, 0, 0)
         text_layout.setSpacing(3)
         text_layout.addWidget(title_label)
         text_layout.addWidget(meta_label)
+
         row = QHBoxLayout()
         row.setContentsMargins(12, 10, 12, 10)
         row.setSpacing(10)
-        row.addWidget(icon_label, 0, Qt.AlignVCenter)
+        row.addWidget(marker_label, 0, Qt.AlignVCenter)
         row.addLayout(text_layout, 1)
-        row.addWidget(button)
+        row.addWidget(button, 0, Qt.AlignVCenter)
         frame.setLayout(row)
         return frame
+
+    @staticmethod
+    def _task_action_button_stylesheet(border: str, foreground: str) -> str:
+        return (
+            "QPushButton { "
+            "background: #ffffff; "
+            f"color: {foreground}; "
+            f"border: 1px solid {border}; "
+            "min-width: 38px; max-width: 38px; min-height: 38px; max-height: 38px; "
+            "border-radius: 19px; padding: 0; font-size: 17px; font-weight: 800; "
+            "}"
+            "QPushButton:hover { background: #f8fafc; border-color: #94a3b8; }"
+            "QPushButton:pressed { background: #eef2f7; }"
+        )
 
     def _register_task_click_target(self, widget: QWidget, task: TaskListItem) -> None:
         if task.is_auto_order_follow_up:
@@ -533,36 +604,55 @@ class DashboardPage(QWidget):
         return f"{order_prefix}{task.title}"
 
     @staticmethod
-    def _task_meta(task: TaskListItem) -> str:
-        details = [f"{t('Due date')}: {task.due_date.isoformat()}"]
+    def _task_description(task: TaskListItem) -> str | None:
         if task.notes:
-            notes = t(task.notes) if task.is_auto_order_follow_up else task.notes
-            details.append(notes)
+            return t(task.notes) if task.is_auto_order_follow_up else task.notes
 
-        return " · ".join(details)
+        return None
+
+    @classmethod
+    def _task_meta(cls, task: TaskListItem) -> str:
+        due_date_text = html_escape(f"{t('Due date')}: {format_date(task.due_date)}")
+        description = cls._task_description(task)
+        if description:
+            description_text = html_escape(cls._shorten_task_text(description))
+            return (
+                f"<span style='color:#64748b; font-weight:650;'>{due_date_text}</span>"
+                f"<br><span style='color:#475569;'>{description_text}</span>"
+            )
+
+        return f"<span style='color:#64748b; font-weight:650;'>{due_date_text}</span>"
+
+    @classmethod
+    def _shorten_task_text(cls, text: str) -> str:
+        normalized = " ".join(text.split())
+        if len(normalized) <= cls._MAX_TASK_DESCRIPTION_CHARS:
+            return normalized
+
+        return normalized[: cls._MAX_TASK_DESCRIPTION_CHARS - 3].rstrip() + "..."
 
     @classmethod
     def _task_label(cls, task: TaskListItem) -> str:
         title = cls._task_title(task)
         if task.notes:
             notes = t(task.notes) if task.is_auto_order_follow_up else task.notes
-            return f"{task.due_date.isoformat()} - {title} ({notes})"
+            return f"{format_date(task.due_date)} - {title} ({notes})"
 
-        return f"{task.due_date.isoformat()} - {title}"
+        return f"{format_date(task.due_date)} - {title}"
 
     @staticmethod
-    def _task_row_treatment(task: TaskListItem, section: str) -> tuple[str, str, str]:
-        icon = "!"
-        if section == "completed":
-            icon = "✓"
-        elif section != "overdue":
-            icon = "○"
-        if section == "overdue":
-            icon = "!"
+    def _task_row_treatment(
+        task: TaskListItem,
+        section: str,
+    ) -> tuple[str, str, str, str, bool]:
+        if section == "completed" or task.completed_at is not None:
+            return "#ecfdf3", "#bbf7d0", "✓", "#15803d", True
+        if section == "overdue" or task.due_date < date.today():
+            return "#fff1f2", "#fecdd3", "!", "#be123c", False
         if task.is_auto_order_follow_up:
-            return "#ede9fe", "#7c3aed", icon
+            return "#ede9fe", "#c4b5fd", "○", "#5b21b6", False
 
-        return task_background(task.color_hex), task.color_hex, icon
+        return task_background(task.color_hex), task.color_hex, "○", task.color_hex, False
 
     @staticmethod
     def _deadline_distance_label(deadline: date) -> str:
@@ -609,6 +699,19 @@ class DashboardPage(QWidget):
             self.load_tasks()
             self.task_changed.emit()
 
+    def _open_order_task_dialog(self, order: DashboardOrderItem) -> None:
+        due_date = order.deadline or self._selected_date()
+        order_label = f"{order.order_number} · {order.customer_name}"
+        dialog = TaskDialog(
+            self,
+            default_due_date=due_date,
+            default_order_id=order.id,
+            default_order_label=order_label,
+        )
+        if dialog.exec():
+            self._load_dashboard()
+            self.task_changed.emit()
+
     def _open_task_edit_dialog(self, task_id: int) -> None:
         dialog = TaskDialog(self, task_id=task_id)
         if dialog.exec():
@@ -623,14 +726,15 @@ class DashboardPage(QWidget):
         self._set_selected_date(date.today())
 
     def _set_selected_date(self, selected_day: date) -> None:
-        selected_qdate = QDate(selected_day.year, selected_day.month, selected_day.day)
-        if self._selected_date_input.date() == selected_qdate:
+        if self._selected_date_value == selected_day:
             self.load_tasks()
-        else:
-            self._selected_date_input.setDate(selected_qdate)
+            return
+
+        self._selected_date_value = selected_day
+        self.load_tasks()
 
     def _selected_date(self) -> date:
-        return self._selected_date_input.date().toPython()
+        return self._selected_date_value
 
     def _complete_task(self, task_id: int) -> None:
         self._change_task_completion(task_id, complete=True)
@@ -639,9 +743,12 @@ class DashboardPage(QWidget):
         self._change_task_completion(task_id, complete=False)
 
     def _change_task_completion(self, task_id: int, complete: bool) -> None:
+        self._task_action_in_progress = True
+        task_updated = False
         try:
             session = SessionLocal()
         except Exception as exc:
+            self._task_action_in_progress = False
             QMessageBox.critical(self, t("Could not update task"), str(exc))
             return
 
@@ -651,13 +758,24 @@ class DashboardPage(QWidget):
             else:
                 ReopenTaskService(session).execute(task_id)
             session.commit()
-            self.load_tasks()
-            self.task_changed.emit()
+            task_updated = True
         except Exception as exc:
             session.rollback()
             QMessageBox.critical(self, t("Could not update task"), t(str(exc)))
         finally:
             session.close()
+            if task_updated:
+                QTimer.singleShot(0, self._finish_task_completion_update)
+            else:
+                QTimer.singleShot(0, self._clear_task_action_in_progress)
+
+    def _finish_task_completion_update(self) -> None:
+        self.load_tasks()
+        self.task_changed.emit()
+        self._clear_task_action_in_progress()
+
+    def _clear_task_action_in_progress(self) -> None:
+        self._task_action_in_progress = False
 
     def _handle_load_tasks_error(self, exc: Exception) -> None:
         self._clear_layout(self._overdue_tasks_layout)

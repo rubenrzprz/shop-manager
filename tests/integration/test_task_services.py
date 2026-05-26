@@ -35,7 +35,7 @@ from app.domain.enums import (
     TaskRecurrenceType,
     TaskSeriesUpdateScope,
 )
-from app.infrastructure.db.models import Task
+from app.infrastructure.db.models import Task, TaskSeries
 
 
 def create_customer(db_session):
@@ -216,6 +216,58 @@ def test_delete_task_service_deletes_future_recurring_occurrences(db_session):
         select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
     ).all()
     assert [task.id for task in remaining] == [first.id]
+    assert series.ends_on == first.due_date
+
+
+def test_delete_task_service_future_scope_prevents_regeneration(db_session):
+    series = CreateTaskSeriesService(db_session).execute(
+        CreateTaskSeriesInput(
+            title="Recurring",
+            recurrence_type=TaskRecurrenceType.DAILY,
+            starts_on=date(2026, 5, 11),
+            ends_on=date(2026, 5, 14),
+        )
+    )
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 11))
+    first, second, *_ = db_session.scalars(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    ).all()
+
+    DeleteTaskService(db_session).execute(second.id, TaskSeriesUpdateScope.FUTURE)
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 11))
+
+    persisted_series = db_session.get(TaskSeries, series.id)
+    remaining = db_session.scalars(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    ).all()
+    assert [task.id for task in remaining] == [first.id]
+    assert persisted_series is not None
+    assert persisted_series.ends_on == first.due_date
+
+
+def test_delete_task_service_future_scope_deactivates_series_from_first_occurrence(db_session):
+    series = CreateTaskSeriesService(db_session).execute(
+        CreateTaskSeriesInput(
+            title="Recurring",
+            recurrence_type=TaskRecurrenceType.DAILY,
+            starts_on=date(2026, 5, 11),
+            ends_on=date(2026, 5, 14),
+        )
+    )
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 11))
+    first = db_session.scalar(
+        select(Task).where(Task.task_series_id == series.id).order_by(Task.due_date)
+    )
+
+    assert first is not None
+    DeleteTaskService(db_session).execute(first.id, TaskSeriesUpdateScope.FUTURE)
+    GenerateRecurringTasksService(db_session).execute(date(2026, 5, 11))
+
+    persisted_series = db_session.get(TaskSeries, series.id)
+    remaining = db_session.scalars(select(Task).where(Task.task_series_id == series.id)).all()
+    assert remaining == []
+    assert persisted_series is not None
+    assert persisted_series.is_active is False
 
 
 def test_delete_task_service_rejects_whole_series_delete(db_session):
@@ -519,6 +571,48 @@ def test_update_task_service_updates_future_series_occurrences(db_session):
     ]
     assert [task.title for task in tasks[1:]] == ["Updated", "Updated", "Updated"]
     assert [task.color_hex for task in tasks[1:]] == ["#16a34a", "#16a34a", "#16a34a"]
+
+
+def test_update_old_recurring_task_regenerates_current_horizon(db_session):
+    today = date.today()
+    old_start = today - timedelta(days=80)
+    old_selected_day = old_start + timedelta(days=10)
+    ApplicationSettingsService(db_session).set_task_generation_horizon_days(30)
+    series = CreateTaskSeriesService(db_session).execute(
+        CreateTaskSeriesInput(
+            title="Original",
+            recurrence_type=TaskRecurrenceType.DAILY,
+            starts_on=old_start,
+        )
+    )
+    GenerateRecurringTasksService(db_session).execute(old_start)
+    GenerateRecurringTasksService(db_session).execute(today)
+    old_task = db_session.scalar(
+        select(Task)
+        .where(Task.task_series_id == series.id)
+        .where(Task.due_date == old_selected_day)
+    )
+
+    assert old_task is not None
+    UpdateTaskService(db_session).execute(
+        old_task.id,
+        UpdateTaskInput(
+            title="Updated",
+            due_date=old_selected_day,
+            color_hex="#16a34a",
+            update_scope=TaskSeriesUpdateScope.FUTURE,
+            recurrence_type=TaskRecurrenceType.DAILY,
+            recurrence_interval=1,
+        ),
+    )
+
+    current_task = db_session.scalar(
+        select(Task)
+        .where(Task.task_series_id == series.id)
+        .where(Task.due_date == today)
+    )
+    assert current_task is not None
+    assert current_task.title == "Updated"
 
 
 def test_update_task_service_whole_series_keeps_previous_occurrences(db_session):

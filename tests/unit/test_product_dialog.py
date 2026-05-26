@@ -7,6 +7,30 @@ from app.ui.dialogs.product_dialog import ProductDialog
 from app.ui.dialogs.supplier_picker_dialog import SupplierPickerDialog
 
 
+class _FakeTextInput:
+    def __init__(self, value):
+        self._value = value
+
+    def text(self):
+        return self._value
+
+
+class _FakePlainTextInput:
+    def __init__(self, value):
+        self._value = value
+
+    def toPlainText(self):
+        return self._value
+
+
+class _FakeCheckBox:
+    def __init__(self, checked):
+        self._checked = checked
+
+    def isChecked(self):
+        return self._checked
+
+
 @pytest.mark.parametrize("raw_value", ["NaN", "sNaN", "Infinity", "-Infinity"])
 def test_parse_decimal_rejects_non_finite_values(raw_value):
     with pytest.raises(ValueError, match="Base price must be a finite number."):
@@ -126,6 +150,50 @@ def test_product_dialog_preserves_category_ids_when_options_are_unavailable():
     dialog._selected_categories_list = FakeSelectedCategoryList()
 
     assert ProductDialog._selected_category_ids_from_table(dialog) == [3, 1]
+
+
+def test_product_dialog_update_preserves_loaded_track_stock(monkeypatch):
+    captured = {}
+
+    class FakeSession:
+        def commit(self):
+            captured["committed"] = True
+
+        def rollback(self):
+            captured["rolled_back"] = True
+
+        def close(self):
+            captured["closed"] = True
+
+    class FakeUpdateProductService:
+        def __init__(self, session):
+            assert isinstance(session, FakeSession)
+
+        def execute(self, product_id, data):
+            captured["product_id"] = product_id
+            captured["track_stock"] = data.track_stock
+
+    dialog = ProductDialog.__new__(ProductDialog)
+    dialog._product_id = 10
+    dialog._product = object()
+    dialog._name_input = _FakeTextInput("Updated")
+    dialog._description_input = _FakePlainTextInput("")
+    dialog._base_price_input = _FakeTextInput("12.50")
+    dialog._track_stock_checkbox = _FakeCheckBox(True)
+    dialog._supplier_input_value = lambda: None
+    dialog._selected_category_ids_from_table = lambda: []
+    dialog._apply_pending_variant_changes = lambda session: None
+    dialog.accept = lambda: captured.setdefault("accepted", True)
+
+    monkeypatch.setattr(product_dialog_module, "SessionLocal", FakeSession)
+    monkeypatch.setattr(product_dialog_module, "UpdateProductService", FakeUpdateProductService)
+
+    ProductDialog._on_accept(dialog)
+
+    assert captured["product_id"] == 10
+    assert captured["track_stock"] is True
+    assert captured["committed"] is True
+    assert captured["accepted"] is True
 
 
 def test_pending_variant_changes_are_applied_on_save(monkeypatch):
