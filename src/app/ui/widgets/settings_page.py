@@ -3,10 +3,12 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QLabel,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -102,18 +104,35 @@ class SettingsPage(QWidget):
             self._default_order_follow_up_input,
         )
 
+        content = QWidget()
+        content_layout = QVBoxLayout()
+        apply_page_chrome(content_layout)
+        content_layout.addWidget(self._title_label)
+        content_layout.addLayout(self._form)
+        content_layout.addWidget(self._task_generation_horizon_description)
+        content_layout.addWidget(self._default_order_follow_up_description)
+        content_layout.addWidget(self._recalculate_follow_ups_button)
+        content_layout.addWidget(self._strict_order_workflow_checkbox)
+        content_layout.addWidget(self._strict_order_workflow_description)
+        content_layout.addWidget(self._order_status_group)
+        content_layout.addStretch()
+        content.setLayout(content_layout)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setWidget(content)
+
+        footer = QWidget()
+        footer_layout = QVBoxLayout()
+        footer_layout.setContentsMargins(24, 0, 24, 24)
+        footer_layout.addWidget(self._save_button)
+        footer.setLayout(footer_layout)
+
         layout = QVBoxLayout()
-        apply_page_chrome(layout)
-        layout.addWidget(self._title_label)
-        layout.addLayout(self._form)
-        layout.addWidget(self._task_generation_horizon_description)
-        layout.addWidget(self._default_order_follow_up_description)
-        layout.addWidget(self._recalculate_follow_ups_button)
-        layout.addWidget(self._strict_order_workflow_checkbox)
-        layout.addWidget(self._strict_order_workflow_description)
-        layout.addWidget(self._order_status_group)
-        layout.addWidget(self._save_button)
-        layout.addStretch()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(scroll_area)
+        layout.addWidget(footer)
         self.setLayout(layout)
 
         self.retranslate_ui()
