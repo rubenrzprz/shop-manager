@@ -262,7 +262,7 @@ class ProductDialog(QDialog):
         self._base_price_input.setText(
             "" if product.base_price is None else str(product.base_price)
         )
-        self._track_stock_checkbox.setChecked(False)
+        self._track_stock_checkbox.setChecked(product.track_stock)
         self._selected_category_ids = [category.id for category in product.categories]
         self._populate_categories_table()
         self._variant_drafts = [
@@ -301,7 +301,7 @@ class ProductDialog(QDialog):
         name = self._name_input.text().strip()
         supplier_id = self._supplier_input_value()
         description = self._description_input.toPlainText().strip() or None
-        track_stock = False
+        track_stock = self._track_stock_checkbox.isChecked()
 
         try:
             base_price = self._parse_decimal(self._base_price_input.text(), t("Base price"))
